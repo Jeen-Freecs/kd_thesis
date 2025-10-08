@@ -1,0 +1,42 @@
+# Baseline configuration (student only, no KD)
+
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 128
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+  pre_trained: false
+  teacher_model_types: []  # No teachers for baseline
+  student_model_type: "mobilenet"
+
+# Model configuration
+model:
+  num_classes: 100
+  student_name: "mobilenetv2_100"
+  student_pretrained: false
+  teacher_names: []  # No teachers
+
+# KD configuration (hard loss only for baseline)
+kd:
+  type: "dynamic"
+  temperature: 4.0
+  learning_rate: 0.01
+  use_soft_loss: false  # No KD
+  use_hard_loss: true  # Only cross-entropy
+  num_classes: 100
+
+# Training configuration
+training:
+  max_epochs: 100
+  patience: 15
+  log_every_n_steps: 50
+
+# Weights & Biases configuration
+wandb:
+  project: "Knowledge-Distillation-CIFAR100-Baseline"
+  name: "MobileNetV2-Baseline"
+  log_model: "all"
+  resume: "allow"
+
