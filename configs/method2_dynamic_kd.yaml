@@ -1,0 +1,50 @@
+# Method 2: α-Guided CA-WKD (Dynamic KD with Gating) configuration
+
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 128
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+  pre_trained: false
+  teacher_model_types: ["resnet", "resnet", "resnet"]  # Types for transforms
+  student_model_type: "mobilenet"
+
+# Model configuration
+model:
+  num_classes: 100
+  # Student model
+  student_name: "mobilenetv2_100"
+  student_pretrained: false
+  # Teacher models (from timm or custom)
+  teacher_names:
+    - "resnet50_cifar100"
+    - "resnet18_cifar100" 
+    - "resnet34_cifar100"
+
+# Knowledge Distillation configuration
+kd:
+  type: "dynamic"  # Options: "dynamic" or "confidence"
+  temperature: 4.0
+  gamma: 10.0  # For dynamic gating
+  threshold: 0.5  # For dynamic gating
+  alpha: 0.5  # Base alpha for dynamic
+  learning_rate: 0.01
+  use_soft_loss: true
+  use_hard_loss: false
+  num_classes: 100
+
+# Training configuration
+training:
+  max_epochs: 150
+  patience: 30
+  log_every_n_steps: 50
+
+# Weights & Biases configuration
+wandb:
+  project: "Knowledge-Distillation-CIFAR100"
+  name: "KD-Experiment"
+  log_model: "all"
+  resume: "allow"
+

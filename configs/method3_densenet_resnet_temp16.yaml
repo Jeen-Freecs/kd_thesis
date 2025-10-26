@@ -1,0 +1,45 @@
+# Multi-Teacher Method 3: DenseNet & ResNet (temp=16.0) - 73.96% accuracy
+# Adaptive α-Guided KD with very high temperature
+
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 128
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+  pre_trained: false
+  teacher_model_types: ["densenet", "resnet"]
+  student_model_type: "mobilenet"
+
+# Model configuration
+model:
+  num_classes: 100
+  student_name: "mobilenetv2_100"
+  student_pretrained: false
+  teacher_names:
+    - "densenet121_cifar100"
+    - "resnet50_cifar100"
+
+# Knowledge Distillation configuration
+kd:
+  type: "confidence"  # Method 3: Adaptive α-Guided KD
+  temperature: 16.0  # Very high temperature for very soft distributions
+  learning_rate: 0.01
+  use_soft_loss: true
+  use_hard_loss: true
+  num_classes: 100
+
+# Training configuration
+training:
+  max_epochs: 150
+  patience: 30
+  log_every_n_steps: 50
+
+# Weights & Biases configuration
+wandb:
+  project: "KD-CIFAR100-Method3"
+  name: "Method3-DenseNet-ResNet-temp16"
+  log_model: "all"
+  resume: "allow"
+

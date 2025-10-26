@@ -1,7 +1,7 @@
-# Deep Learning Framework
-torch>=2.0.0
-torchvision>=0.15.0
-torchaudio>=2.0.0
+# Deep Learning Framework (PyTorch with CUDA)
+# Note: Install PyTorch separately with CUDA support first
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# OR use the install.sh script which handles this automatically
 
 # PyTorch Lightning
 pytorch-lightning>=2.0.0

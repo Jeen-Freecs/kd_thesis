@@ -3,7 +3,7 @@
 Training script for knowledge distillation.
 
 Usage:
-    python scripts/train.py --config configs/config.yaml
+    python scripts/train.py --config configs/method2_dynamic_kd.yaml
 """
 
 import argparse
@@ -25,7 +25,7 @@ def main():
     parser.add_argument(
         '--config',
         type=str,
-        default='configs/config.yaml',
+        default='configs/method2_dynamic_kd.yaml',
         help='Path to config file'
     )
     parser.add_argument(

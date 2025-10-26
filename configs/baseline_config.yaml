@@ -18,13 +18,10 @@ model:
   student_pretrained: false
   teacher_names: []  # No teachers
 
-# KD configuration (hard loss only for baseline)
+# KD configuration (baseline - no KD)
 kd:
-  type: "dynamic"
-  temperature: 4.0
+  type: "baseline"  # Baseline student without KD
   learning_rate: 0.01
-  use_soft_loss: false  # No KD
-  use_hard_loss: true  # Only cross-entropy
   num_classes: 100
 
 # Training configuration

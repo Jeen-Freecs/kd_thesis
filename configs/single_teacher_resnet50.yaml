@@ -1,4 +1,5 @@
-# Configuration file for Knowledge Distillation
+# Single Teacher: ResNet-50 (α=0.75) - 73.75% accuracy
+# This config uses a single ResNet-50 teacher with high KD weight
 
 # Data configuration
 data:
@@ -8,31 +9,27 @@ data:
   val_size: 5000
   seed: 42
   pre_trained: false
-  teacher_model_types: ["resnet", "resnet", "resnet"]  # Types for transforms
+  teacher_model_types: ["resnet"]  # Single teacher type
   student_model_type: "mobilenet"
 
 # Model configuration
 model:
   num_classes: 100
-  # Student model
   student_name: "mobilenetv2_100"
   student_pretrained: false
-  # Teacher models (from timm or custom)
   teacher_names:
-    - "resnet50_cifar100"
-    - "resnet18_cifar100" 
-    - "resnet34_cifar100"
+    - "resnet50_cifar100"  # Single ResNet-50 teacher
 
 # Knowledge Distillation configuration
 kd:
-  type: "dynamic"  # Options: "dynamic" or "confidence"
+  type: "dynamic"  # Use dynamic type with fixed alpha
   temperature: 4.0
-  gamma: 10.0  # For dynamic gating
-  threshold: 0.5  # For dynamic gating
-  alpha: 0.5  # Base alpha for dynamic
+  gamma: 100.0  # Very high gamma to keep alpha close to 0.75
+  threshold: 0.0  # Set threshold to maintain alpha ~ 0.75
+  alpha: 0.75  # Base alpha = 0.75 (high KD weight)
   learning_rate: 0.01
   use_soft_loss: true
-  use_hard_loss: false
+  use_hard_loss: true
   num_classes: 100
 
 # Training configuration
@@ -43,8 +40,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "Knowledge-Distillation-CIFAR100"
-  name: "KD-Experiment"
+  project: "KD-CIFAR100-Single-Teacher"
+  name: "ResNet50-alpha0.75"
   log_model: "all"
   resume: "allow"
 

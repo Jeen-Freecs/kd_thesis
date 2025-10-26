@@ -3,7 +3,7 @@
 Run experiments with different configurations.
 
 Usage:
-    python scripts/experiment.py --config configs/config.yaml --exp-name my_experiment
+    python scripts/experiment.py --config configs/method2_dynamic_kd.yaml --exp-name my_experiment
 """
 
 import argparse
@@ -107,7 +107,7 @@ def main():
     parser.add_argument(
         '--config',
         type=str,
-        default='configs/config.yaml',
+        default='configs/method2_dynamic_kd.yaml',
         help='Path to config file'
     )
     parser.add_argument(

@@ -6,7 +6,12 @@ from pytorch_lightning.loggers import WandbLogger
 from typing import Optional, Dict, Any
 import torch
 
-from ..models.kd_module import DynamicKDLitModule, ConfidenceBasedKDLitModule
+from ..models.kd_module import (
+    CAWeightedKDLitModule,
+    DynamicKDLitModule,
+    ConfidenceBasedKDLitModule,
+    BaselineStudentModule
+)
 from ..data.datamodule import CIFAR100DataModule
 from ..utils.logger import get_logger
 
@@ -96,9 +101,15 @@ def create_kd_module_from_config(
     """
     Create KD module from configuration.
     
+    Supports all three methods from the AML Final Project:
+    - 'ca_weighted': Method 1 - CA-WKD (Confidence-Aware Weighted KD)
+    - 'dynamic': Method 2 - α-Guided CA-WKD (with gating)
+    - 'confidence': Method 3 - Adaptive α-Guided KD (most confident teacher)
+    - 'baseline': Baseline student without KD
+    
     Args:
         config: Configuration dictionary
-        teacher_models: List of teacher models
+        teacher_models: List of teacher models (can be None/empty for baseline)
         student_model: Student model
         
     Returns:
@@ -107,27 +118,52 @@ def create_kd_module_from_config(
     kd_config = config.get('kd', {})
     kd_type = kd_config.get('type', 'dynamic')
     
+    # Baseline: Student without KD
+    if kd_type == 'baseline':
+        kd_module = BaselineStudentModule(
+            student_model=student_model,
+            learning_rate=kd_config.get('learning_rate', 1e-2),
+            num_classes=kd_config.get('num_classes', 100)
+        )
+        return kd_module
+    
+    # Common parameters for all KD methods
     common_params = {
         'teacher_models': teacher_models,
         'student_model': student_model,
         'temperature': kd_config.get('temperature', 4.0),
-        'learning_rate': kd_config.get('learning_rate', 1e-3),
-        'use_soft_loss': kd_config.get('use_soft_loss', True),
-        'use_hard_loss': kd_config.get('use_hard_loss', True),
+        'learning_rate': kd_config.get('learning_rate', 1e-2),
         'num_classes': kd_config.get('num_classes', 100)
     }
     
-    if kd_type == 'dynamic':
+    # Method 1: CA-WKD (Confidence-Aware Weighted KD)
+    if kd_type == 'ca_weighted':
+        kd_module = CAWeightedKDLitModule(**common_params)
+    
+    # Method 2: α-Guided CA-WKD (Dynamic with gating)
+    elif kd_type == 'dynamic':
         kd_module = DynamicKDLitModule(
             **common_params,
             gamma=kd_config.get('gamma', 10.0),
             threshold=kd_config.get('threshold', 0.5),
-            alpha=kd_config.get('alpha', 0.5)
+            alpha=kd_config.get('alpha', 0.5),
+            use_soft_loss=kd_config.get('use_soft_loss', True),
+            use_hard_loss=kd_config.get('use_hard_loss', True)
         )
+    
+    # Method 3: Adaptive α-Guided KD (Confidence-based)
     elif kd_type == 'confidence':
-        kd_module = ConfidenceBasedKDLitModule(**common_params)
+        kd_module = ConfidenceBasedKDLitModule(
+            **common_params,
+            use_soft_loss=kd_config.get('use_soft_loss', True),
+            use_hard_loss=kd_config.get('use_hard_loss', True)
+        )
+    
     else:
-        raise ValueError(f"Unknown KD type: {kd_type}")
+        raise ValueError(
+            f"Unknown KD type: {kd_type}. "
+            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence'"
+        )
     
     return kd_module
 

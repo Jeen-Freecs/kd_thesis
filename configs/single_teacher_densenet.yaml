@@ -1,0 +1,47 @@
+# Single Teacher: DenseNet-121 (α=0.50) - 75.38% accuracy
+# This config uses a single DenseNet-121 teacher - BEST OVERALL RESULT
+
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 128
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+  pre_trained: false
+  teacher_model_types: ["densenet"]  # Single DenseNet teacher
+  student_model_type: "mobilenet"
+
+# Model configuration
+model:
+  num_classes: 100
+  student_name: "mobilenetv2_100"
+  student_pretrained: false
+  teacher_names:
+    - "densenet121_cifar100"  # Single DenseNet-121 teacher
+
+# Knowledge Distillation configuration
+kd:
+  type: "dynamic"  # Use dynamic type with fixed alpha
+  temperature: 4.0
+  gamma: 100.0  # Very high gamma to keep alpha close to 0.50
+  threshold: 0.0  # Set threshold to maintain alpha ~ 0.50
+  alpha: 0.50  # Base alpha = 0.50 (balanced KD and CE)
+  learning_rate: 0.01
+  use_soft_loss: true
+  use_hard_loss: true
+  num_classes: 100
+
+# Training configuration
+training:
+  max_epochs: 150
+  patience: 30
+  log_every_n_steps: 50
+
+# Weights & Biases configuration
+wandb:
+  project: "KD-CIFAR100-Single-Teacher"
+  name: "DenseNet121-alpha0.50-BEST"
+  log_model: "all"
+  resume: "allow"
+

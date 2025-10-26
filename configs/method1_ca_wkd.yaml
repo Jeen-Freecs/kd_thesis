@@ -1,0 +1,46 @@
+# Method 1: CA-WKD (Confidence-Aware Weighted KD) configuration
+
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 128
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+  pre_trained: false
+  teacher_model_types: ["resnet", "densenet", "vit"]  # For diverse teacher architectures
+  student_model_type: "mobilenet"
+
+# Model configuration
+model:
+  num_classes: 100
+  # Student model
+  student_name: "mobilenetv2_100"
+  student_pretrained: false
+  # Teacher models (from timm or custom)
+  teacher_names:
+    - "resnet50_cifar100"
+    - "densenet121_cifar100"
+    - "vit"
+
+# Knowledge Distillation configuration
+kd:
+  type: "ca_weighted"  # Method 1: CA-WKD
+  temperature: 4.0
+  learning_rate: 0.01
+  num_classes: 100
+
+# Training configuration
+training:
+  max_epochs: 100
+  patience: 20
+  log_every_n_steps: 50
+
+# Weights & Biases configuration
+wandb:
+  project: "Knowledge-Distillation-CIFAR100-CA-WKD"
+  name: "KD-Method1-CA-WKD"
+  log_model: "all"
+  resume: "allow"
+
+

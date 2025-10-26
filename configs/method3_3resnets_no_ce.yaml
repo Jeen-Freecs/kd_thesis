@@ -1,4 +1,5 @@
-# Confidence-based KD configuration
+# Multi-Teacher Method 3: 3 ResNets WITHOUT CE loss - 71.89% accuracy
+# Adaptive α-Guided KD with only KD loss (no ground truth)
 
 # Data configuration
 data:
@@ -23,11 +24,11 @@ model:
 
 # Knowledge Distillation configuration
 kd:
-  type: "confidence"  # Confidence-based selection
+  type: "confidence"  # Method 3: Adaptive α-Guided KD
   temperature: 4.0
   learning_rate: 0.01
   use_soft_loss: true
-  use_hard_loss: true
+  use_hard_loss: false  # NO CE LOSS - KD only
   num_classes: 100
 
 # Training configuration
@@ -38,8 +39,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "Knowledge-Distillation-CIFAR100-Confidence"
-  name: "KD-Confidence-Based"
+  project: "KD-CIFAR100-Method3"
+  name: "Method3-3ResNets-NoCE"
   log_model: "all"
   resume: "allow"
 

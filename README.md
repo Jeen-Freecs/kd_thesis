@@ -1,435 +1,618 @@
 # Confidence-Aware Ensemble Knowledge Distillation
 
-A professional implementation of **Confidence-Aware Ensemble Knowledge Distillation** for image classification on CIFAR-100. This project implements two novel knowledge distillation strategies that dynamically adjust the learning process based on teacher model confidence.
+Complete implementation of multi-teacher knowledge distillation methods for CIFAR-100 image classification.
 
 ## 🎯 Overview
 
-This project implements advanced knowledge distillation techniques where multiple teacher models guide a lightweight student model. The key innovation is the dynamic adjustment of knowledge transfer based on teacher confidence and performance.
+This project implements **three knowledge distillation methods** plus baseline training, achieving up to **75.38% accuracy** on CIFAR-100:
+
+- **Baseline**: Student from scratch → 66.29%
+- **Method 1**: CA-WKD (Confidence-Aware Weighted KD) → 73.33%
+- **Method 2**: α-Guided CA-WKD (Dynamic gating) → 71.38%
+- **Method 3**: Adaptive α-Guided KD → **74.00%** (best multi-teacher)
+- **Single Teacher**: DenseNet-121 → **75.38%** (best overall)
 
 ### Key Features
 
-- **Two KD Strategies**:
-  - **Dynamic KD with Weighted Ensemble**: Dynamically weights teachers based on their performance and uses confidence-based gating
-  - **Confidence-Based KD**: Selects the most confident teacher per sample and uses confidence as the mixing weight
-  
-- **Modular Architecture**: Professional, maintainable codebase with clear separation of concerns
-- **Multiple Teacher Support**: Ensemble of ResNet, DenseNet, ViT, and other models
-- **Experiment Tracking**: Full integration with Weights & Biases
-- **Flexible Configuration**: YAML-based configuration management
-- **PyTorch Lightning**: Modern training framework with automatic optimization
+- ✅ **12 Pre-configured Experiments** - All experiments from research paper
+- ✅ **Automated Setup** - One-command installation for vast.ai/Linux
+- ✅ **Weights & Biases Integration** - Real-time experiment tracking
+- ✅ **Multiple Teacher Support** - ResNet, DenseNet, ViT ensembles
+- ✅ **PyTorch Lightning** - Modern training framework
+- ✅ **Production Ready** - Tested on vast.ai GPU instances
 
-## 📋 Table of Contents
+---
 
-- [Installation](#installation)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Running Experiments](#running-experiments)
-- [Model Architectures](#model-architectures)
-- [Knowledge Distillation Methods](#knowledge-distillation-methods)
-- [Results](#results)
-- [Advanced Usage](#advanced-usage)
+## 🚀 Quick Start (5 Minutes)
 
-## 🚀 Installation
+### On vast.ai or Linux with CUDA
+
+```bash
+# 1. Clone repository
+git clone <your-repo-url>
+cd Confidence-Aware-Ensemble-Knowledge-Distillation
+
+# 2. Install everything (takes 5 minutes)
+bash install.sh
+
+# 3. Activate environment
+conda activate kd-env
+
+# 4. Login to wandb (get API key from https://wandb.ai/authorize)
+wandb login
+
+# 5. Start training best model!
+python scripts/train.py --config configs/single_teacher_densenet.yaml
+```
+
+**That's it!** Training starts immediately. View results at https://wandb.ai
+
+### Run All 12 Experiments Automatically
+
+```bash
+# Runs all experiments sequentially (70-90 hours)
+bash run_all_experiments.sh
+
+# Or run in background
+nohup ./run_all_experiments.sh > experiments.log 2>&1 &
+tail -f experiments.log
+```
+
+---
+
+## 📊 All Experiments
+
+### Complete Experiment List
+
+| Config File | Method | Teacher(s) | Accuracy | Training Time |
+|-------------|--------|------------|----------|---------------|
+| `baseline_config.yaml` | Baseline | None | 66.29% | 2-3h |
+| `single_teacher_densenet.yaml` | Single | DenseNet-121 | **75.38%** ⭐ | 4-6h |
+| `single_teacher_vit.yaml` | Single | ViT | 74.00% | 6-8h |
+| `single_teacher_resnet50.yaml` | Single | ResNet-50 | 73.75% | 4-6h |
+| `method1_ca_wkd.yaml` | Method 1 | R+D+V | 73.33% | 8-10h |
+| `method2_diverse_ensemble.yaml` | Method 2 | R+D+V | 71.38% | 8-10h |
+| `method2_dynamic_kd.yaml` | Method 2 | 3 ResNets | ~72% | 6-8h |
+| `method3_densenet_resnet_temp8.yaml` | Method 3 | D+R | **74.00%** ⭐ | 6-8h |
+| `method3_densenet_resnet_temp16.yaml` | Method 3 | D+R | 73.96% | 6-8h |
+| `method3_adaptive_alpha.yaml` | Method 3 | 3 ResNets | 72.90% | 6-8h |
+| `method3_diverse_ensemble.yaml` | Method 3 | R+D+V | 72.10% | 8-10h |
+| `method3_3resnets_no_ce.yaml` | Method 3 | 3 ResNets | 71.89% | 6-8h |
+
+**Legend**: R=ResNet, D=DenseNet, V=ViT
+
+### Individual Experiment Commands
+
+```bash
+# Baseline
+python scripts/train.py --config configs/baseline_config.yaml
+
+# Best performers
+python scripts/train.py --config configs/single_teacher_densenet.yaml  # 75.38%
+python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml  # 74.00%
+
+# All single teachers
+python scripts/train.py --config configs/single_teacher_resnet50.yaml
+python scripts/train.py --config configs/single_teacher_vit.yaml
+
+# All methods
+python scripts/train.py --config configs/method1_ca_wkd.yaml
+python scripts/train.py --config configs/method2_diverse_ensemble.yaml
+python scripts/train.py --config configs/method2_dynamic_kd.yaml
+python scripts/train.py --config configs/method3_densenet_resnet_temp16.yaml
+python scripts/train.py --config configs/method3_adaptive_alpha.yaml
+python scripts/train.py --config configs/method3_diverse_ensemble.yaml
+python scripts/train.py --config configs/method3_3resnets_no_ce.yaml
+```
+
+---
+
+## 💻 Installation
 
 ### Prerequisites
 
-- Python 3.8+
-- CUDA-capable GPU (recommended)
-- 8GB+ GPU memory for training
+- Python 3.11
+- CUDA-capable GPU (≥12GB VRAM recommended)
+- 50GB disk space
+- Internet connection
+
+### Automated Installation (Recommended)
+
+```bash
+bash install.sh
+```
+
+**What this installs**:
+- Miniconda (if not present)
+- Python 3.11 environment (`kd-env`)
+- PyTorch with CUDA 11.8 support
+- All dependencies
+- Jupyter kernel
+
+### Manual Installation
+
+<details>
+<summary>Click to expand manual installation steps</summary>
+
+```bash
+# 1. Create conda environment
+conda create -n kd-env python=3.11 -y
+conda activate kd-env
+
+# 2. Install PyTorch with CUDA
+# For CUDA 11.8
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# For CUDA 12.1
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Setup wandb
+wandb login
+```
+</details>
+
+---
+
+## 🌐 Running on vast.ai
+
+### Step 1: Rent GPU Instance
+
+1. Go to [vast.ai](https://vast.ai)
+2. Select instance with:
+   - GPU: RTX 3090/4090 or A6000
+   - VRAM: ≥12GB
+   - CUDA: 11.8 or 12.1
+3. Connect via SSH
+
+### Step 2: Setup & Train
+
+```bash
+# Upload project
+cd /workspace
+git clone <your-repo-url>
+cd Confidence-Aware-Ensemble-Knowledge-Distillation
+
+# Install (5 minutes)
+bash install.sh
+
+# Activate & login
+conda activate kd-env
+wandb login
+
+# Start training
+python scripts/train.py --config configs/single_teacher_densenet.yaml
+```
+
+### Keep Training Running (If Connection Drops)
+
+```bash
+# Use tmux to keep training alive
+tmux new -s training
+python scripts/train.py --config configs/...
+
+# Detach: Press Ctrl+B, then D
+
+# Reconnect later
+tmux attach -t training
+```
+
+### Cost Estimate
+
+| GPU | Price/Hour | All 12 Experiments |
+|-----|------------|--------------------|
+| RTX 3090 | $0.20-0.40 | $15-30 |
+| RTX 4090 | $0.40-0.60 | $30-50 |
+
+Total time: 70-90 hours on single GPU
+
+---
+
+## 📈 Weights & Biases Integration
 
 ### Setup
 
-1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/Confidence-Aware-Ensemble-Knowledge-Distillation.git
-cd Confidence-Aware-Ensemble-Knowledge-Distillation
-```
-
-2. **Create a virtual environment**:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. **Install dependencies**:
-```bash
-pip install -r requirements.txt
-```
-
-4. **Install the package** (optional):
-```bash
-pip install -e .
-```
-
-5. **Setup Weights & Biases** (for experiment tracking):
-```bash
+# Get API key from https://wandb.ai/authorize
 wandb login
 ```
+
+### What Gets Logged
+
+- ✅ Training/validation loss curves
+- ✅ Accuracy and AUROC metrics
+- ✅ Learning rate schedule
+- ✅ Teacher confidence scores
+- ✅ Model checkpoints
+- ✅ Hyperparameters
+
+### View Results
+
+Go to https://wandb.ai/your-username to see:
+- Real-time training progress
+- Comparison across experiments
+- Interactive charts
+- Model artifacts
+
+### Offline Mode
+
+If no internet:
+```bash
+export WANDB_MODE=offline
+python scripts/train.py --config configs/...
+
+# Sync later
+wandb sync --sync-all
+```
+
+### Custom Project Name
+
+Edit any config file:
+```yaml
+wandb:
+  project: "My-Custom-Project"
+  name: "Experiment-1"
+```
+
+---
+
+## ⚙️ Configuration
+
+All experiments are controlled via YAML files in `configs/` directory.
+
+### Config Structure
+
+```yaml
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 128  # Reduce to 64 if out of memory
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+
+# Model configuration
+model:
+  num_classes: 100
+  student_name: "mobilenetv2_100"
+  teacher_names:
+    - "resnet50_cifar100"
+    - "densenet121_cifar100"
+
+# Knowledge Distillation configuration
+kd:
+  type: "confidence"  # or "ca_weighted", "dynamic", "baseline"
+  temperature: 4.0
+  learning_rate: 0.01
+
+# Training configuration
+training:
+  max_epochs: 150
+  patience: 30  # Early stopping
+
+# Weights & Biases configuration
+wandb:
+  project: "KD-CIFAR100"
+  name: "experiment-name"
+```
+
+### Adjusting for Your GPU
+
+#### Small GPU (8GB VRAM)
+```yaml
+data:
+  batch_size: 64
+  num_workers: 2
+```
+
+#### Large GPU (24GB+ VRAM)
+```yaml
+data:
+  batch_size: 256
+  num_workers: 8
+```
+
+---
+
+## 🧠 Knowledge Distillation Methods
+
+### Method 1: CA-WKD (Confidence-Aware Weighted KD)
+
+**How it works**:
+- Weights teachers by their performance (lower loss → higher weight)
+- Equal contribution from KD and ground truth
+- Simple, no hyperparameter tuning needed
+
+**Formula**: `L_total = L_KL + L_CE`
+
+**Use when**: You want a simple multi-teacher baseline
+
+```bash
+python scripts/train.py --config configs/method1_ca_wkd.yaml
+```
+
+### Method 2: α-Guided CA-WKD (Dynamic Gating)
+
+**How it works**:
+- Dynamic weighting like Method 1
+- Adaptive gating: balances KD vs ground truth based on teacher confidence
+- High teacher confidence → More KD loss
+- Low teacher confidence → More ground truth loss
+
+**Formula**: `L_total = α * L_KL + (1-α) * L_CE` where α = sigmoid(γ * (conf - θ))
+
+**Use when**: You have time for hyperparameter tuning (γ and θ)
+
+```bash
+python scripts/train.py --config configs/method2_diverse_ensemble.yaml
+```
+
+### Method 3: Adaptive α-Guided KD (Best Multi-Teacher)
+
+**How it works**:
+- Selects the most confident teacher for each sample
+- Uses teacher confidence as α (no manual tuning!)
+- Different teachers selected for different samples
+
+**Formula**: `L_total = α * L_KL* + (1-α) * L_CE` where α = mean(max_k p_Tk(y|x))
+
+**Use when**: You want best multi-teacher performance without tuning
+
+```bash
+python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml  # Best
+```
+
+### Single Teacher (Simplest, Often Best)
+
+**How it works**:
+- One strong teacher (DenseNet-121)
+- Fixed α = 0.5 (balanced)
+- Simpler than multi-teacher
+
+**Use when**: You want maximum accuracy with simplest setup
+
+```bash
+python scripts/train.py --config configs/single_teacher_densenet.yaml  # 75.38%
+```
+
+---
+
+## 📊 Results & Analysis
+
+### Key Findings
+
+1. **Single teacher (DenseNet-121) is best overall**: 75.38%
+2. **Best multi-teacher matches single ViT**: Method 3 with temp=8.0 → 74.00%
+3. **Temperature matters**: Increasing from 4.0 to 8.0 improves multi-teacher by +2%
+4. **Two teachers better than three**: DenseNet+ResNet (74.00%) > 3 ResNets (72.90%)
+5. **Ground truth helps**: Using CE loss adds ~1% accuracy
+
+### Performance Comparison
+
+| Approach | Accuracy | Complexity | Training Time |
+|----------|----------|------------|---------------|
+| Baseline | 66.29% | Simplest | 2-3h |
+| Single Teacher | **75.38%** | Simple | 4-6h |
+| Multi-Teacher (Method 3) | **74.00%** | Medium | 6-8h |
+
+**Recommendation**: Use single teacher (DenseNet-121) for production
+
+---
+
+## 🔧 Troubleshooting
+
+### CUDA Out of Memory
+
+**Solution 1**: Reduce batch size
+```yaml
+data:
+  batch_size: 64  # or 32
+```
+
+**Solution 2**: Use gradient accumulation (add to trainer.py)
+```python
+accumulate_grad_batches=2
+```
+
+### Teacher Download Fails
+
+**Solution**: Pre-download teachers
+```bash
+python -c "
+import torch
+urls = [
+    'https://huggingface.co/edadaltocg/resnet50_cifar100/resolve/main/pytorch_model.bin',
+    'https://huggingface.co/edadaltocg/densenet121_cifar100/resolve/main/pytorch_model.bin',
+]
+for url in urls:
+    name = url.split('/')[-3]
+    torch.hub.load_state_dict_from_url(url, file_name=f'{name}.pth')
+    print(f'Downloaded {name}')
+"
+```
+
+### wandb Authentication Fails
+
+**Solution**:
+```bash
+wandb login --relogin
+# Or use offline mode
+export WANDB_MODE=offline
+```
+
+### Training is Slow
+
+**Check**:
+```bash
+nvidia-smi  # Verify GPU is being used
+```
+
+**If on CPU**: Make sure PyTorch with CUDA is installed
+```bash
+python -c "import torch; print(torch.cuda.is_available())"
+# Should print: True
+```
+
+### Connection Lost to vast.ai
+
+**Solution**: Always use `tmux`
+```bash
+tmux new -s training
+python scripts/train.py --config configs/...
+# Detach: Ctrl+B then D
+```
+
+---
 
 ## 📁 Project Structure
 
 ```
 Confidence-Aware-Ensemble-Knowledge-Distillation/
-├── configs/                      # Configuration files
-│   ├── config.yaml              # Main KD configuration
-│   ├── baseline_config.yaml     # Baseline (no KD) configuration
-│   └── confidence_config.yaml   # Confidence-based KD configuration
+├── README.md                    # This file
+├── install.sh                   # Automated installation
+├── run_all_experiments.sh       # Run all 12 experiments
+├── requirements.txt             # Python dependencies
+│
+├── configs/                     # 12 experiment configs
+│   ├── baseline_config.yaml
+│   ├── single_teacher_*.yaml (3 files)
+│   ├── method1_ca_wkd.yaml
+│   ├── method2_*.yaml (2 files)
+│   └── method3_*.yaml (5 files)
 │
 ├── src/                         # Source code
-│   ├── data/                    # Data loading and preprocessing
-│   │   ├── datamodule.py       # PyTorch Lightning DataModule
-│   │   └── transforms.py       # Custom transforms
-│   │
-│   ├── models/                  # Model architectures
-│   │   ├── student.py          # Student model creation
-│   │   ├── teacher.py          # Teacher model loading
-│   │   └── kd_module.py        # KD Lightning modules
-│   │
-│   ├── training/               # Training utilities
-│   │   └── trainer.py          # Training logic
-│   │
-│   ├── evaluation/             # Evaluation utilities
-│   │   └── evaluator.py        # Model evaluation
-│   │
-│   └── utils/                  # Helper utilities
-│       ├── config.py           # Configuration management
-│       └── logger.py           # Logging utilities
+│   ├── data/                    # Data loading
+│   ├── models/                  # Student, Teacher, KD modules
+│   ├── training/                # Training utilities
+│   ├── evaluation/              # Evaluation
+│   └── utils/                   # Config, logging
 │
-├── scripts/                    # Executable scripts
-│   ├── train.py               # Training script
-│   ├── evaluate.py            # Evaluation script
-│   └── experiment.py          # Experiment runner
+├── scripts/                     # Executable scripts
+│   ├── train.py                 # Main training script
+│   ├── evaluate.py              # Evaluation script
+│   └── experiment.py            # Experiment runner
 │
-├── notebooks/                 # Jupyter notebooks (optional)
-├── logs/                     # Training logs
-├── data/                     # Dataset directory (auto-created)
-└── requirements.txt          # Python dependencies
+├── notebooks/                   # Jupyter notebooks
+└── logs/                       # Training logs (auto-created)
 ```
 
-## 🏃 Quick Start
+---
 
-### 1. Train Baseline Model (No Knowledge Distillation)
+## 🎯 Recommended Workflow
 
-Train a student model from scratch without knowledge distillation:
+### Day 1: Setup & Baseline (3-4 hours)
 
 ```bash
+# Setup
+bash install.sh
+conda activate kd-env
+wandb login
+
+# Test with baseline
 python scripts/train.py --config configs/baseline_config.yaml
 ```
 
-### 2. Train with Dynamic KD
-
-Train with weighted ensemble and dynamic gating:
+### Day 2: Best Experiments (10-14 hours)
 
 ```bash
-python scripts/train.py --config configs/config.yaml
+# Best single teacher
+python scripts/train.py --config configs/single_teacher_densenet.yaml
+
+# Best multi-teacher
+python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml
 ```
 
-### 3. Train with Confidence-Based KD
-
-Train with most-confident teacher selection:
+### Day 3-4: Full Ablation Study
 
 ```bash
-python scripts/train.py --config configs/confidence_config.yaml
+# All experiments
+bash run_all_experiments.sh
 ```
 
-### 4. Evaluate a Trained Model
+### Day 5: Analysis
+
+- Download checkpoints from `lightning_logs/`
+- Analyze results on wandb.ai
+- Compare methods
+- Write report
+
+---
+
+## 📈 Monitoring Training
+
+### Terminal Output
+
+```
+Epoch 15/150: 100%|████████| 390/390 [02:15<00:00]
+train/loss=1.234, val/acc=0.723, val/auroc=0.896
+```
+
+### Weights & Biases Dashboard
+
+Open https://wandb.ai to see:
+- Live loss curves
+- Accuracy progression
+- Learning rate schedule
+- Teacher confidence scores
+- GPU utilization
+
+### GPU Monitoring
 
 ```bash
-python scripts/evaluate.py \
-    --checkpoint path/to/checkpoint.ckpt \
-    --config configs/config.yaml \
-    --split test
+# Real-time GPU usage
+watch -n 1 nvidia-smi
+
+# Check GPU is being used
+nvidia-smi
 ```
 
-### 5. Run a Custom Experiment
+---
 
-```bash
-python scripts/experiment.py \
-    --config configs/config.yaml \
-    --exp-name my_experiment
-```
-
-## ⚙️ Configuration
-
-All experiments are controlled via YAML configuration files. Here's a breakdown of the main sections:
-
-### Data Configuration
-
-```yaml
-data:
-  data_dir: "./data"              # Dataset directory
-  batch_size: 128                 # Training batch size
-  num_workers: 4                  # Data loader workers
-  val_size: 5000                  # Validation set size
-  seed: 42                        # Random seed
-  teacher_model_types: ["resnet", "resnet", "resnet"]  # Teacher transform types
-  student_model_type: "mobilenet" # Student transform type
-```
-
-### Model Configuration
-
-```yaml
-model:
-  num_classes: 100
-  student_name: "mobilenetv2_100"  # Student architecture
-  student_pretrained: false
-  teacher_names:                    # Teacher models from timm
-    - "resnet50_cifar100"
-    - "resnet18_cifar100"
-    - "resnet34_cifar100"
-```
-
-### Knowledge Distillation Configuration
-
-```yaml
-kd:
-  type: "dynamic"                  # "dynamic" or "confidence"
-  temperature: 4.0                 # Softmax temperature
-  gamma: 10.0                      # Gating function scaling
-  threshold: 0.5                   # Confidence threshold
-  alpha: 0.5                       # Base mixing weight
-  learning_rate: 0.01
-  use_soft_loss: true             # Enable KD loss
-  use_hard_loss: false            # Enable CE loss
-```
-
-### Training Configuration
-
-```yaml
-training:
-  max_epochs: 150
-  patience: 30                     # Early stopping patience
-  log_every_n_steps: 50
-```
-
-## 🔬 Running Experiments
-
-### Experiment 1: Baseline Performance
-
-Measure student performance without distillation:
-
-```bash
-python scripts/experiment.py \
-    --config configs/baseline_config.yaml \
-    --exp-name baseline_mobilenet
-```
-
-### Experiment 2: Single Teacher KD
-
-Modify config to use one teacher:
-
-```yaml
-model:
-  teacher_names:
-    - "resnet50_cifar100"
-```
-
-```bash
-python scripts/experiment.py \
-    --config configs/config.yaml \
-    --exp-name single_teacher_kd
-```
-
-### Experiment 3: Multi-Teacher Ensemble
-
-Use multiple teachers with dynamic weighting:
-
-```bash
-python scripts/experiment.py \
-    --config configs/config.yaml \
-    --exp-name multi_teacher_ensemble
-```
-
-### Experiment 4: Confidence-Based Selection
-
-Use the most confident teacher:
-
-```bash
-python scripts/experiment.py \
-    --config configs/confidence_config.yaml \
-    --exp-name confidence_based_kd
-```
+## 🚀 Advanced Usage
 
 ### Resume Training from Checkpoint
 
 ```bash
+python scripts/train.py \
+    --config configs/single_teacher_densenet.yaml \
+    --checkpoint lightning_logs/version_X/checkpoints/best.ckpt
+```
+
+### Evaluate Trained Model
+
+```bash
+python scripts/evaluate.py \
+    --checkpoint lightning_logs/version_X/checkpoints/best.ckpt \
+    --config configs/single_teacher_densenet.yaml \
+    --split test
+```
+
+### Custom Experiment
+
+```bash
 python scripts/experiment.py \
-    --config configs/config.yaml \
-    --exp-name resumed_experiment \
-    --checkpoint path/to/checkpoint.ckpt
+    --config configs/method3_densenet_resnet_temp8.yaml \
+    --exp-name "my-custom-experiment"
 ```
 
-## 🏗️ Model Architectures
+### Modify Hyperparameters
 
-### Student Models
+Create new config file or edit existing:
+```yaml
+kd:
+  temperature: 8.0  # Try different temperatures
+  learning_rate: 0.005  # Try different learning rates
 
-- **MobileNetV2**: Lightweight CNN (Default)
-- **EfficientNet-B0**: Efficient scaled architecture
-- Custom architectures via `timm` library
-
-### Teacher Models (Pretrained on CIFAR-100)
-
-- **ResNet-18/34/50**: Deep residual networks
-- **DenseNet-121**: Densely connected networks
-- **Vision Transformer (ViT)**: Transformer-based architecture
-
-All teacher models are automatically frozen during training.
-
-## 📚 Knowledge Distillation Methods
-
-### 1. Dynamic KD with Weighted Ensemble
-
-**Key Components**:
-
-1. **Dynamic Teacher Weighting**: Each teacher receives a weight based on its cross-entropy loss:
-   ```
-   w_k = (1/(K-1)) * [1 - exp(L_CE^k) / Σ_j exp(L_CE^j)]
-   ```
-
-2. **Confidence-Based Gating**: Automatically balances soft (KD) and hard (CE) losses:
-   ```
-   gate = sigmoid(γ * (conf - threshold))
-   L_total = gate * L_KD + (1-gate) * α * L_CE
-   ```
-
-3. **Temperature Scaling**: Softens probability distributions for knowledge transfer
-
-**When to Use**: 
-- Multiple diverse teachers available
-- Want automatic balancing of KD and CE losses
-- Need per-sample adaptive learning
-
-### 2. Confidence-Based KD
-
-**Key Components**:
-
-1. **Most Confident Teacher Selection**: For each sample, selects the teacher with highest probability on the true class
-
-2. **Dynamic Alpha**: Uses teacher confidence as mixing weight:
-   ```
-   α = mean(max_teacher_confidence)
-   L_total = α * L_KD + (1-α) * L_CE
-   ```
-
-3. **Teacher Usage Tracking**: Logs which teacher is selected for each sample
-
-**When to Use**:
-- Teachers have varying expertise across different classes
-- Want to leverage the best teacher for each sample
-- Need interpretable teacher selection
-
-### Loss Functions
-
-- **Soft Loss (L_KD)**: KL Divergence between student and teacher distributions
-- **Hard Loss (L_CE)**: Cross-entropy with ground truth labels
-- **Temperature**: Controls smoothness of probability distributions (typically 3-5)
-
-## 📊 Results
-
-### Expected Performance on CIFAR-100
-
-| Method | Accuracy | Parameters |
-|--------|----------|------------|
-| MobileNetV2 (Baseline) | ~68-70% | 3.5M |
-| Single Teacher KD | ~70-72% | 3.5M |
-| Multi-Teacher Dynamic KD | ~72-74% | 3.5M |
-| Confidence-Based KD | ~71-73% | 3.5M |
-| ResNet-50 Teacher | ~80-81% | 25M |
-
-*Note: Results may vary based on hyperparameters and training duration*
-
-### Monitoring Training
-
-View real-time metrics in Weights & Biases:
-- Training/validation loss
-- Accuracy and AUROC
-- Teacher confidence and gate values
-- Teacher usage distribution (confidence-based)
-- Learning rate schedule
-
-## 🔧 Advanced Usage
-
-### Custom Teacher Models
-
-Add your own pretrained teacher:
-
-```python
-from src.models.teacher import create_teacher_models
-
-# Define custom teacher loading
-def load_custom_teacher(num_classes, device):
-    model = YourCustomModel(num_classes=num_classes)
-    model.load_state_dict(torch.load('path/to/weights.pth'))
-    return model
-
-# Modify teacher.py to include your model
+training:
+  max_epochs: 200  # Train longer
+  patience: 40  # More patience
 ```
 
-### Custom Student Architecture
+---
 
-```python
-from src.models.student import create_student_model
-
-student = create_student_model(
-    model_name='efficientnet_b0',  # Any timm model
-    num_classes=100,
-    pretrained=False
-)
-```
-
-### Hyperparameter Tuning
-
-Key hyperparameters to tune:
-
-1. **Temperature** (1-10): Higher = softer distributions
-2. **Gamma** (1-20): Controls gating sensitivity
-3. **Threshold** (0.3-0.7): Confidence threshold for gating
-4. **Learning Rate** (1e-4 to 1e-2): Adjust based on model size
-5. **Alpha** (0.1-0.9): Base mixing weight
-
-### Multi-GPU Training
-
-Modify trainer configuration:
-
-```python
-trainer = pl.Trainer(
-    devices=4,  # Number of GPUs
-    accelerator='gpu',
-    strategy='ddp'  # Distributed Data Parallel
-)
-```
-
-### Mixed Precision Training
-
-Automatically enabled for GPU training with `precision='16-mixed'` in the trainer.
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **CUDA Out of Memory**:
-   - Reduce batch size in config
-   - Use gradient accumulation
-   - Reduce number of teachers
-
-2. **Teacher Download Fails**:
-   - Check internet connection
-   - Manually download models to `~/.cache/torch/hub/checkpoints/`
-
-3. **WandB Login Issues**:
-   - Run `wandb login` and enter your API key
-   - Or set `WANDB_MODE=offline` for local logging
-
-### Debug Mode
-
-Enable verbose logging:
-
-```python
-python scripts/train.py --config configs/config.yaml --log-level DEBUG
-```
-
-## 📖 Citation
+## 📝 Citation
 
 If you use this code in your research, please cite:
 
@@ -442,33 +625,48 @@ If you use this code in your research, please cite:
 }
 ```
 
-## 📝 License
+---
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## 📧 Support
 
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📧 Contact
-
-For questions or issues, please:
+For issues or questions:
+- Check troubleshooting section above
 - Open an issue on GitHub
-- Contact: your.email@example.com
-
-## 🙏 Acknowledgments
-
-- PyTorch Lightning for the training framework
-- TIMM for pretrained models
-- Weights & Biases for experiment tracking
-- CIFAR-100 dataset creators
+- Email: your.email@example.com
 
 ---
+
+## ✅ Quick Command Reference
+
+```bash
+# Setup
+bash install.sh && conda activate kd-env && wandb login
+
+# Best single teacher
+python scripts/train.py --config configs/single_teacher_densenet.yaml
+
+# Best multi-teacher
+python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml
+
+# All experiments
+bash run_all_experiments.sh
+
+# Monitor
+tail -f logs/train.log
+watch -n 1 nvidia-smi
+
+# Evaluate
+python scripts/evaluate.py --checkpoint <path> --config <config>
+```
+
+---
+
+**🎯 You're ready to train! Start with:**
+```bash
+bash install.sh
+conda activate kd-env
+wandb login
+python scripts/train.py --config configs/single_teacher_densenet.yaml
+```
 
 **Happy Training! 🚀**
