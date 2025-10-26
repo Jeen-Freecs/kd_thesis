@@ -13,8 +13,11 @@ if ! command -v conda &> /dev/null; then
     rm -rf ~/miniconda3/miniconda.sh
     ~/miniconda3/bin/conda init bash
     source ~/.bashrc
+    CONDA_BASE=~/miniconda3
 else
     echo "Conda already installed, skipping..."
+    # Detect conda installation path
+    CONDA_BASE=$(conda info --base)
 fi
 
 # Create & activate the Conda environment
@@ -22,7 +25,7 @@ echo "Creating conda environment 'kd-env' with Python 3.11..."
 conda create -n kd-env python=3.11 -y
 
 # Activate environment
-source ~/miniconda3/etc/profile.d/conda.sh
+source ${CONDA_BASE}/etc/profile.d/conda.sh
 conda activate kd-env
 
 # Detect CUDA version
