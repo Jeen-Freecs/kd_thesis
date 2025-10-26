@@ -36,9 +36,9 @@ fi
 # Install PyTorch with CUDA support
 echo "Installing PyTorch with CUDA support..."
 # For CUDA 11.8 (most common on vast.ai)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 # For CUDA 12.1, uncomment below and comment above:
-# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Install other requirements
 echo "Installing remaining dependencies..."
