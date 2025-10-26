@@ -27,7 +27,7 @@ kd:
   gamma: 100.0  # Very high gamma to keep alpha close to 0.25
   threshold: 0.0  # Set threshold to maintain alpha ~ 0.25
   alpha: 0.25  # Base alpha = 0.25 (low KD weight, high CE weight)
-  learning_rate: 0.01
+  learning_rate: 0.001  # 1e-3 to match notebook
   use_soft_loss: true
   use_hard_loss: true
   num_classes: 100

@@ -26,7 +26,7 @@ model:
 kd:
   type: "confidence"  # Method 3: Adaptive α-Guided KD
   temperature: 4.0
-  learning_rate: 0.01
+  learning_rate: 0.001  # 1e-3 to match notebook
   use_soft_loss: true
   use_hard_loss: false  # NO CE LOSS - KD only
   num_classes: 100

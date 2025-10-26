@@ -30,7 +30,7 @@ kd:
   gamma: 10.0  # For dynamic gating
   threshold: 0.5  # For dynamic gating
   alpha: 0.5  # Base alpha for dynamic
-  learning_rate: 0.01
+  learning_rate: 0.001  # 1e-3 to match notebook
   use_soft_loss: true
   use_hard_loss: false
   num_classes: 100
