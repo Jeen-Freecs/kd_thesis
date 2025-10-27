@@ -13,6 +13,9 @@ build/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
+# Data
+data/
+
 # Environment
 venv/
 env/

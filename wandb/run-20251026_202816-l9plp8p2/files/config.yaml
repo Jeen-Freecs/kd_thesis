@@ -1,0 +1,81 @@
+_wandb:
+    value:
+        cli_version: 0.22.2
+        e:
+            3ea634qtdujhkv3dmoahi4634rubahik:
+                args:
+                    - --config
+                    - configs/baseline_config.yaml
+                codePath: scripts/train.py
+                codePathLocal: scripts/train.py
+                cpu_count: 36
+                cpu_count_logical: 36
+                cudaVersion: "12.7"
+                disk:
+                    /:
+                        total: "113816633344"
+                        used: "11115106304"
+                email: bakridenov.2105666@studenti.uniroma1.it
+                executable: /opt/conda/envs/kd-env/bin/python
+                git:
+                    commit: e31695d4e0c196fede59686748b6af3c22b303b8
+                    remote: git@github.com:Jeen-Freecs/kd_thesis.git
+                gpu: NVIDIA GeForce RTX 4070 Ti SUPER
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 8448
+                      memoryTotal: "17171480576"
+                      name: NVIDIA GeForce RTX 4070 Ti SUPER
+                      uuid: GPU-80650080-8021-2f3c-8fd3-07fcbbc762cc
+                host: 8c8a15117d83
+                memory:
+                    total: "405519532032"
+                os: Linux-5.15.0-124-generic-x86_64-with-glibc2.35
+                program: /workspace/kd_thesis/scripts/train.py
+                python: CPython 3.11.14
+                root: .
+                startedAt: "2025-10-26T20:28:16.039177Z"
+                writerId: 3ea634qtdujhkv3dmoahi4634rubahik
+        m:
+            - "1": trainer/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.11.14
+        t:
+            "1":
+                - 1
+                - 5
+                - 9
+                - 41
+                - 49
+                - 53
+                - 63
+                - 103
+            "2":
+                - 1
+                - 5
+                - 9
+                - 41
+                - 49
+                - 53
+                - 63
+                - 103
+            "3":
+                - 7
+                - 13
+                - 66
+            "4": 3.11.14
+            "5": 0.22.2
+            "12": 0.22.2
+            "13": linux-x86_64
+learning_rate:
+    value: 0.001
+num_classes:
+    value: 100
