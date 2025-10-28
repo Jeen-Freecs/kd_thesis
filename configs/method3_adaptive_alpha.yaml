@@ -38,8 +38,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "Knowledge-Distillation-CIFAR100-Confidence"
-  name: "KD-Confidence-Based"
+  project: "KD-CIFAR100"
+  name: "Method3-Adaptive-3xResNet-WithCE-temp4"
   log_model: "all"
   resume: "allow"
 

@@ -39,8 +39,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "KD-CIFAR100-Method3"
-  name: "Method3-3ResNets-NoCE"
+  project: "KD-CIFAR100"
+  name: "Method3-Adaptive-3xResNet-NoCE-temp4"
   log_model: "all"
   resume: "allow"
 

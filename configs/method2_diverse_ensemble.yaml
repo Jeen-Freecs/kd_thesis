@@ -42,8 +42,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "KD-CIFAR100-Method2"
-  name: "Method2-Diverse-Ensemble"
+  project: "KD-CIFAR100"
+  name: "Method2-Dynamic-Diverse-gamma10"
   log_model: "all"
   resume: "allow"
 

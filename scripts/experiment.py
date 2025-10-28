@@ -31,7 +31,7 @@ def run_experiment(config, exp_name, checkpoint_path=None, device='cuda'):
         checkpoint_path: Path to checkpoint to resume from
         device: Device to use
     """
-    logger = setup_logger(log_file=f'logs/experiment_{exp_name}.log')
+    logger = setup_logger(log_file=f'logs/training/experiment_{exp_name}.log')
     logger.info(f"Starting experiment: {exp_name}")
     
     # Update WandB config with experiment name

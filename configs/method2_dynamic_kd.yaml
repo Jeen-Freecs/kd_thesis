@@ -43,8 +43,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "Knowledge-Distillation-CIFAR100"
-  name: "KD-Experiment"
+  project: "KD-CIFAR100"
+  name: "Method2-Dynamic-3xResNet-gamma5"
   log_model: "all"
   resume: "allow"
 

@@ -113,7 +113,7 @@ def main():
     args = parser.parse_args()
     
     # Setup logger
-    logger = setup_logger(log_file='logs/evaluate.log')
+    logger = setup_logger(log_file='logs/archive/evaluate.log')
     logger.info("Starting evaluation script...")
     
     # Validate arguments
@@ -218,17 +218,26 @@ def main():
             # Extract run ID from checkpoint path or arguments
             run_id_for_name = args.wandb_run_id if args.wandb_run_id else checkpoint_path.split('/')[-2] if '/' in checkpoint_path else 'unknown'
             
+            # Get model config for logging metadata
+            model_config = config.get('model', {})
+            kd_config = config.get('kd', {})
+            
             eval_run = wandb.init(
                 project=wandb_config.get('project', 'Knowledge-Distillation-CIFAR100'),
                 name=f"eval-{args.split}-{run_id_for_name}",
                 job_type="evaluation",
-                tags=[args.split, "evaluation", run_id_for_name],
+                tags=[args.split, "evaluation", run_id_for_name, kd_config.get('type', 'baseline')],
                 config={
                     "config_file": args.config,
                     "checkpoint": checkpoint_path,
                     "split": args.split,
                     "device": args.device,
-                    "run_id": run_id_for_name
+                    "run_id": run_id_for_name,
+                    # Add model metadata for filtering/comparison
+                    "student_model": model_config.get('student_name', 'unknown'),
+                    "teacher_models": model_config.get('teacher_names', []),
+                    "kd_type": kd_config.get('type', 'baseline'),
+                    "temperature": kd_config.get('temperature', None),
                 }
             )
             
@@ -241,11 +250,19 @@ def main():
                 f"{args.split}/total": results['total']
             })
             
-            # Create summary
-            wandb.summary[f"{args.split}_loss"] = results['loss']
-            wandb.summary[f"{args.split}_accuracy"] = results['accuracy']
-            wandb.summary[f"{args.split}_accuracy_percent"] = results['accuracy'] * 100
-            wandb.summary["checkpoint_path"] = checkpoint_path
+            # Create summary with comprehensive metadata
+            wandb.summary.update({
+                # Metrics
+                f"{args.split}_loss": results['loss'],
+                f"{args.split}_accuracy": results['accuracy'],
+                f"{args.split}_accuracy_percent": results['accuracy'] * 100,
+                # Metadata for easy filtering
+                "checkpoint_path": checkpoint_path,
+                "model_name": model_config.get('student_name', 'unknown'),
+                "teachers": ', '.join(model_config.get('teacher_names', [])),
+                "kd_method": kd_config.get('type', 'baseline'),
+                "num_teachers": len(model_config.get('teacher_names', [])),
+            })
             
             wandb.finish()
             logger.info("✓ Results logged to WandB")

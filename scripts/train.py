@@ -44,7 +44,7 @@ def main():
     args = parser.parse_args()
     
     # Setup logger
-    logger = setup_logger(log_file='logs/train.log')
+    logger = setup_logger(log_file='logs/archive/train.log')
     logger.info("Starting training script...")
     
     # Load config

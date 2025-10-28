@@ -52,6 +52,40 @@ def train_kd_model(
         resume=wandb_config.get('resume', 'allow')
     )
     
+    # Log hyperparameters to WandB for tracking
+    model_config = config.get('model', {})
+    kd_config = config.get('kd', {})
+    data_config = config.get('data', {})
+    
+    wandb_logger.experiment.config.update({
+        # Model configuration
+        "student_model": model_config.get('student_name', 'unknown'),
+        "teacher_models": model_config.get('teacher_names', []),
+        "num_classes": model_config.get('num_classes', 100),
+        "student_pretrained": model_config.get('student_pretrained', False),
+        
+        # KD configuration
+        "kd_type": kd_config.get('type', 'baseline'),
+        "temperature": kd_config.get('temperature', None),
+        "alpha": kd_config.get('alpha', None),
+        "gamma": kd_config.get('gamma', None),
+        "threshold": kd_config.get('threshold', None),
+        "learning_rate": kd_config.get('learning_rate', 0.001),
+        "use_soft_loss": kd_config.get('use_soft_loss', True),
+        "use_hard_loss": kd_config.get('use_hard_loss', True),
+        
+        # Training configuration
+        "max_epochs": max_epochs,
+        "patience": patience,
+        "log_every_n_steps": log_every_n_steps,
+        
+        # Data configuration
+        "batch_size": data_config.get('batch_size', 128),
+        "val_size": data_config.get('val_size', 5000),
+        "num_workers": data_config.get('num_workers', 4),
+        "seed": data_config.get('seed', 42),
+    })
+    
     # Get WandB run ID for organizing checkpoints
     run_id = wandb_logger.experiment.id
     
@@ -71,21 +105,16 @@ def train_kd_model(
             verbose=True
         ),
         # Save best checkpoint based on validation accuracy
+        # Only keep the single best checkpoint and the last checkpoint
+        # Note: Using simple filenames to avoid directory creation from metric names with slashes
         ModelCheckpoint(
             dirpath=checkpoint_dir,
             monitor='val/accuracy',
             mode='max',
             save_top_k=1,
-            filename='best-epoch={epoch:02d}-val_acc={val/accuracy:.4f}',
-            save_last=False,
-            verbose=True
-        ),
-        # Save latest checkpoint (last epoch)
-        ModelCheckpoint(
-            dirpath=checkpoint_dir,
-            save_top_k=0,
+            filename='best',
             save_last=True,
-            filename='latest',
+            auto_insert_metric_name=False,
             verbose=True
         )
     ]

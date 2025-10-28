@@ -32,8 +32,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "Knowledge-Distillation-CIFAR100-Baseline"
-  name: "MobileNetV2-Baseline"
+  project: "KD-CIFAR100"
+  name: "Baseline-MobileNetV2"
   log_model: "all"
   resume: "allow"
 

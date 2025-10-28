@@ -38,8 +38,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "Knowledge-Distillation-CIFAR100-CA-WKD"
-  name: "KD-Method1-CA-WKD"
+  project: "KD-CIFAR100"
+  name: "Method1-CA-WKD-ResNet-DenseNet-ViT"
   log_model: "all"
   resume: "allow"
 

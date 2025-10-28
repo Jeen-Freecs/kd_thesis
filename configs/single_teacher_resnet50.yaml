@@ -40,8 +40,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "KD-CIFAR100-Single-Teacher"
-  name: "ResNet50-alpha0.75"
+  project: "KD-CIFAR100"
+  name: "Single-ResNet50-alpha0.75"
   log_model: "all"
   resume: "allow"
 

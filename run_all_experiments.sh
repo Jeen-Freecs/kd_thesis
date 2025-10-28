@@ -21,8 +21,8 @@ NC='\033[0m' # No Color
 
 # Logging
 LOG_DIR="logs"
-RESULTS_FILE="${LOG_DIR}/all_results_$(date +%Y%m%d_%H%M%S).txt"
-mkdir -p "${LOG_DIR}"
+mkdir -p "${LOG_DIR}/training" "${LOG_DIR}/evaluation" "${LOG_DIR}/results" "${LOG_DIR}/archive"
+RESULTS_FILE="${LOG_DIR}/results/all_results_$(date +%Y%m%d_%H%M%S).txt"
 
 echo "========================================" | tee -a "${RESULTS_FILE}"
 echo "Starting Experiment Pipeline" | tee -a "${RESULTS_FILE}"
@@ -36,12 +36,10 @@ echo "" | tee -a "${RESULTS_FILE}"
 ###############################################################################
 
 CONFIGS=(
-    "configs/baseline_config.yaml"
-    "configs/method1_ca_wkd.yaml"
-    "configs/method2_dynamic_kd.yaml"
-    "configs/method3_adaptive_alpha.yaml"
-    "configs/single_teacher_resnet50.yaml"
+    "configs/method3_diverse_ensemble.yaml"
     "configs/single_teacher_densenet.yaml"
+    "configs/single_teacher_resnet50.yaml"
+    "configs/single_teacher_vit.yaml"
 )
 
 ###############################################################################
@@ -107,8 +105,8 @@ for config in "${CONFIGS[@]}"; do
     fi
     
     # Create temporary log file for this run
-    TRAIN_LOG="${LOG_DIR}/train_$(basename ${config%.yaml})_$(date +%Y%m%d_%H%M%S).log"
-    EVAL_LOG="${LOG_DIR}/eval_$(basename ${config%.yaml})_$(date +%Y%m%d_%H%M%S).log"
+    TRAIN_LOG="${LOG_DIR}/training/train_$(basename ${config%.yaml})_$(date +%Y%m%d_%H%M%S).log"
+    EVAL_LOG="${LOG_DIR}/evaluation/eval_$(basename ${config%.yaml})_$(date +%Y%m%d_%H%M%S).log"
     
     ###########################################################################
     # Step 1: Training

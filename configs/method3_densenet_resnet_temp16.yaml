@@ -38,8 +38,8 @@ training:
 
 # Weights & Biases configuration
 wandb:
-  project: "KD-CIFAR100-Method3"
-  name: "Method3-DenseNet-ResNet-temp16"
+  project: "KD-CIFAR100"
+  name: "Method3-Adaptive-DenseNet-ResNet-temp16"
   log_model: "all"
   resume: "allow"
 
