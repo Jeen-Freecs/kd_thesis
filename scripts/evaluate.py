@@ -3,13 +3,19 @@
 Evaluation script for trained models.
 
 Usage:
+    # Evaluate from local checkpoint
     python scripts/evaluate.py --checkpoint path/to/checkpoint.ckpt --config configs/method2_dynamic_kd.yaml
+    
+    # Evaluate from WandB artifact
+    python scripts/evaluate.py --wandb-artifact username/project/artifact:version --config configs/method2_dynamic_kd.yaml
 """
 
 import argparse
 import torch
 from pathlib import Path
 import sys
+import wandb
+import os
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,13 +26,64 @@ from src.evaluation import evaluate_model, load_model_from_checkpoint
 from src.utils import load_config, setup_logger
 
 
+def download_wandb_checkpoint(artifact_path, logger):
+    """
+    Download checkpoint from WandB artifact.
+    
+    Args:
+        artifact_path: WandB artifact path (e.g., 'username/project/model-best:v0')
+        logger: Logger instance
+    
+    Returns:
+        Path to downloaded checkpoint file
+    """
+    logger.info(f"Downloading checkpoint from WandB: {artifact_path}")
+    
+    try:
+        # Initialize WandB API
+        api = wandb.Api()
+        
+        # Get artifact
+        artifact = api.artifact(artifact_path)
+        
+        # Download to temporary directory
+        artifact_dir = artifact.download()
+        
+        # Find checkpoint file in downloaded directory
+        checkpoint_files = list(Path(artifact_dir).glob('*.ckpt'))
+        
+        if not checkpoint_files:
+            raise ValueError(f"No .ckpt files found in artifact: {artifact_path}")
+        
+        checkpoint_path = str(checkpoint_files[0])
+        logger.info(f"Downloaded checkpoint to: {checkpoint_path}")
+        
+        return checkpoint_path
+        
+    except Exception as e:
+        logger.error(f"Failed to download checkpoint from WandB: {e}")
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Knowledge Distillation Model")
     parser.add_argument(
         '--checkpoint',
         type=str,
-        required=True,
-        help='Path to model checkpoint'
+        default=None,
+        help='Path to local model checkpoint'
+    )
+    parser.add_argument(
+        '--wandb-artifact',
+        type=str,
+        default=None,
+        help='WandB artifact path (e.g., username/project/model-best:v0)'
+    )
+    parser.add_argument(
+        '--wandb-run-id',
+        type=str,
+        default=None,
+        help='WandB run ID to download best checkpoint from (e.g., l9plp8p2)'
     )
     parser.add_argument(
         '--config',
@@ -47,12 +104,51 @@ def main():
         choices=['val', 'test'],
         help='Which split to evaluate on'
     )
+    parser.add_argument(
+        '--no-wandb',
+        action='store_true',
+        help='Disable WandB logging for evaluation'
+    )
     
     args = parser.parse_args()
     
     # Setup logger
     logger = setup_logger(log_file='logs/evaluate.log')
     logger.info("Starting evaluation script...")
+    
+    # Validate arguments
+    if not args.checkpoint and not args.wandb_artifact and not args.wandb_run_id:
+        parser.error("Must provide either --checkpoint, --wandb-artifact, or --wandb-run-id")
+    
+    # Determine checkpoint path
+    checkpoint_path = None
+    
+    if args.checkpoint:
+        # Use local checkpoint
+        checkpoint_path = args.checkpoint
+        logger.info(f"Using local checkpoint: {checkpoint_path}")
+    
+    elif args.wandb_artifact:
+        # Download from WandB artifact
+        checkpoint_path = download_wandb_checkpoint(args.wandb_artifact, logger)
+    
+    elif args.wandb_run_id:
+        # Download best checkpoint from specific run
+        config = load_config(args.config)
+        wandb_config = config.get('wandb', {})
+        project = wandb_config.get('project', 'Knowledge-Distillation-CIFAR100')
+        
+        # Try to find the best model artifact for this run
+        artifact_path = f"{project}/model-{args.wandb_run_id}:best"
+        logger.info(f"Attempting to download from run: {args.wandb_run_id}")
+        
+        try:
+            checkpoint_path = download_wandb_checkpoint(artifact_path, logger)
+        except:
+            # Fallback: try latest version
+            logger.warning(f"Could not find 'best' artifact, trying 'latest'")
+            artifact_path = f"{project}/model-{args.wandb_run_id}:latest"
+            checkpoint_path = download_wandb_checkpoint(artifact_path, logger)
     
     # Load config
     logger.info(f"Loading config from: {args.config}")
@@ -91,8 +187,8 @@ def main():
     )
     
     # Load from checkpoint
-    logger.info(f"Loading model from checkpoint: {args.checkpoint}")
-    checkpoint = torch.load(args.checkpoint, map_location=args.device)
+    logger.info(f"Loading model from checkpoint: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location=args.device)
     
     # Extract student model state dict
     new_state_dict = {}
@@ -110,6 +206,52 @@ def main():
         dataloader=dataloader,
         device=args.device
     )
+    
+    # Log results to WandB (unless disabled)
+    if not args.no_wandb and checkpoint_path:
+        logger.info("Logging evaluation results to WandB...")
+        
+        try:
+            # Initialize WandB for logging evaluation results
+            wandb_config = config.get('wandb', {})
+            
+            # Extract run ID from checkpoint path or arguments
+            run_id_for_name = args.wandb_run_id if args.wandb_run_id else checkpoint_path.split('/')[-2] if '/' in checkpoint_path else 'unknown'
+            
+            eval_run = wandb.init(
+                project=wandb_config.get('project', 'Knowledge-Distillation-CIFAR100'),
+                name=f"eval-{args.split}-{run_id_for_name}",
+                job_type="evaluation",
+                tags=[args.split, "evaluation", run_id_for_name],
+                config={
+                    "config_file": args.config,
+                    "checkpoint": checkpoint_path,
+                    "split": args.split,
+                    "device": args.device,
+                    "run_id": run_id_for_name
+                }
+            )
+            
+            # Log evaluation metrics
+            wandb.log({
+                f"{args.split}/loss": results['loss'],
+                f"{args.split}/accuracy": results['accuracy'],
+                f"{args.split}/accuracy_percent": results['accuracy'] * 100,
+                f"{args.split}/correct": results['correct'],
+                f"{args.split}/total": results['total']
+            })
+            
+            # Create summary
+            wandb.summary[f"{args.split}_loss"] = results['loss']
+            wandb.summary[f"{args.split}_accuracy"] = results['accuracy']
+            wandb.summary[f"{args.split}_accuracy_percent"] = results['accuracy'] * 100
+            wandb.summary["checkpoint_path"] = checkpoint_path
+            
+            wandb.finish()
+            logger.info("✓ Results logged to WandB")
+        except Exception as e:
+            logger.warning(f"Failed to log to WandB: {e}")
+            logger.info("Continuing without WandB logging...")
     
     # Print results
     logger.info("Evaluation Results:")

@@ -44,14 +44,25 @@ def train_kd_model(
     
     # WandB logger
     wandb_config = config.get('wandb', {})
+    experiment_name = wandb_config.get('name', 'KD-Experiment')
     wandb_logger = WandbLogger(
         project=wandb_config.get('project', 'Knowledge-Distillation-CIFAR100'),
-        name=wandb_config.get('name', 'KD-Experiment'),
-        log_model=wandb_config.get('log_model', 'all'),
+        name=experiment_name,
+        log_model='all',  # Upload all checkpoints (best + latest = 2 files)
         resume=wandb_config.get('resume', 'allow')
     )
     
-    # Callbacks
+    # Get WandB run ID for organizing checkpoints
+    run_id = wandb_logger.experiment.id
+    
+    # Create experiment-specific checkpoint directory with run ID
+    kd_type = config.get('kd', {}).get('type', 'unknown')
+    checkpoint_dir = f'checkpoints/{kd_type}/{experiment_name}/{run_id}'
+    
+    logger.info(f"Checkpoints will be saved to: {checkpoint_dir}")
+    logger.info(f"WandB Run ID: {run_id}")
+    
+    # Callbacks - Save best and latest checkpoints
     callbacks = [
         EarlyStopping(
             monitor='val/accuracy',
@@ -59,20 +70,34 @@ def train_kd_model(
             mode='max',
             verbose=True
         ),
+        # Save best checkpoint based on validation accuracy
         ModelCheckpoint(
+            dirpath=checkpoint_dir,
             monitor='val/accuracy',
             mode='max',
-            save_top_k=3,
-            filename='kd-{epoch:02d}-{val_accuracy:.4f}'
+            save_top_k=1,
+            filename='best-epoch={epoch:02d}-val_acc={val/accuracy:.4f}',
+            save_last=False,
+            verbose=True
+        ),
+        # Save latest checkpoint (last epoch)
+        ModelCheckpoint(
+            dirpath=checkpoint_dir,
+            save_top_k=0,
+            save_last=True,
+            filename='latest',
+            verbose=True
         )
     ]
     
     # Trainer
+    # Note: With WandB logger, Lightning won't create lightning_logs/ directory
+    # All logging goes to WandB, checkpoints go to our custom directory
     trainer = pl.Trainer(
         max_epochs=max_epochs,
         devices=1 if torch.cuda.is_available() else None,
         accelerator='gpu' if torch.cuda.is_available() else 'cpu',
-        logger=wandb_logger,
+        logger=wandb_logger,  # WandB logger prevents lightning_logs/ creation
         precision='16-mixed' if torch.cuda.is_available() else 32,
         log_every_n_steps=log_every_n_steps,
         callbacks=callbacks,

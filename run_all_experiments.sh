@@ -1,107 +1,230 @@
 #!/bin/bash
-#
-# Run All Knowledge Distillation Experiments
-# This script runs all 12 experiments from the AML Final Project
-#
-# Usage: bash run_all_experiments.sh
-# Or: nohup ./run_all_experiments.sh > all_experiments.log 2>&1 &
+
+###############################################################################
+# Automated Training and Evaluation Pipeline
+# 
+# This script:
+# 1. Trains models with different configurations sequentially
+# 2. Evaluates each trained model on test set
+# 3. Logs all results
+# 4. Handles errors gracefully
+###############################################################################
 
 set -e  # Exit on error
 
-echo "========================================"
-echo "Knowledge Distillation Experiments"
-echo "Starting all experiments..."
-echo "========================================"
-echo ""
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# Activate conda environment
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate kd-env
+# Logging
+LOG_DIR="logs"
+RESULTS_FILE="${LOG_DIR}/all_results_$(date +%Y%m%d_%H%M%S).txt"
+mkdir -p "${LOG_DIR}"
 
-# Create results directory
-mkdir -p results
-mkdir -p logs
+echo "========================================" | tee -a "${RESULTS_FILE}"
+echo "Starting Experiment Pipeline" | tee -a "${RESULTS_FILE}"
+echo "Date: $(date)" | tee -a "${RESULTS_FILE}"
+echo "========================================" | tee -a "${RESULTS_FILE}"
+echo "" | tee -a "${RESULTS_FILE}"
 
-# Log start time
-START_TIME=$(date +%s)
-echo "Start time: $(date)"
-echo ""
+###############################################################################
+# Configuration List
+# Add or remove configs as needed
+###############################################################################
 
-# Array of experiments with descriptions
-declare -A experiments
-experiments=(
-    ["configs/baseline_config.yaml"]="Baseline - Student from scratch (66.29%)"
-    ["configs/single_teacher_densenet.yaml"]="Single Teacher DenseNet-121 α=0.50 (75.38%) ⭐ BEST"
-    ["configs/single_teacher_resnet50.yaml"]="Single Teacher ResNet-50 α=0.75 (73.75%)"
-    ["configs/single_teacher_vit.yaml"]="Single Teacher ViT α=0.25 (74.00%)"
-    ["configs/method1_ca_wkd.yaml"]="Method 1: CA-WKD Diverse Ensemble (73.33%)"
-    ["configs/method2_diverse_ensemble.yaml"]="Method 2: α-Guided Diverse Ensemble (71.38%)"
-    ["configs/method2_dynamic_kd.yaml"]="Method 2: α-Guided 3 ResNets"
-    ["configs/method3_densenet_resnet_temp8.yaml"]="Method 3: DenseNet+ResNet temp=8.0 (74.00%) ⭐ BEST MULTI"
-    ["configs/method3_densenet_resnet_temp16.yaml"]="Method 3: DenseNet+ResNet temp=16.0 (73.96%)"
-    ["configs/method3_adaptive_alpha.yaml"]="Method 3: 3 ResNets (72.90%)"
-    ["configs/method3_diverse_ensemble.yaml"]="Method 3: Diverse Ensemble (72.10%)"
-    ["configs/method3_3resnets_no_ce.yaml"]="Method 3: 3 ResNets No CE Loss (71.89%)"
+CONFIGS=(
+    "configs/baseline_config.yaml"
+    "configs/method1_ca_wkd.yaml"
+    "configs/method2_dynamic_kd.yaml"
+    "configs/method3_adaptive_alpha.yaml"
+    "configs/single_teacher_resnet50.yaml"
+    "configs/single_teacher_densenet.yaml"
 )
 
-# Counter
-TOTAL=${#experiments[@]}
+###############################################################################
+# Helper Functions
+###############################################################################
+
+print_header() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}$1${NC}"
+    echo -e "${BLUE}========================================${NC}"
+}
+
+print_success() {
+    echo -e "${GREEN}✓ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}✗ $1${NC}"
+}
+
+print_info() {
+    echo -e "${YELLOW}ℹ $1${NC}"
+}
+
+extract_run_id() {
+    # Extract WandB run ID from training log
+    local log_file=$1
+    local run_id=$(grep -oE "WandB Run ID: [a-z0-9]+" "${log_file}" | tail -1 | cut -d' ' -f4)
+    echo "${run_id}"
+}
+
+extract_checkpoint_dir() {
+    # Extract checkpoint directory from training log
+    local log_file=$1
+    local checkpoint_dir=$(grep -oE "Checkpoints will be saved to: .+" "${log_file}" | tail -1 | cut -d':' -f2- | xargs)
+    echo "${checkpoint_dir}"
+}
+
+###############################################################################
+# Main Experiment Loop
+###############################################################################
+
+TOTAL_CONFIGS=${#CONFIGS[@]}
 CURRENT=0
 SUCCESSFUL=0
 FAILED=0
 
-# Run each experiment
-for config in "${!experiments[@]}"; do
+for config in "${CONFIGS[@]}"; do
     CURRENT=$((CURRENT + 1))
-    DESCRIPTION="${experiments[$config]}"
     
-    echo "=========================================="
-    echo "Experiment $CURRENT of $TOTAL"
-    echo "Config: $config"
-    echo "Description: $DESCRIPTION"
-    echo "=========================================="
+    print_header "Experiment ${CURRENT}/${TOTAL_CONFIGS}: ${config}"
+    echo "" | tee -a "${RESULTS_FILE}"
+    echo "----------------------------------------" | tee -a "${RESULTS_FILE}"
+    echo "Config ${CURRENT}/${TOTAL_CONFIGS}: ${config}" | tee -a "${RESULTS_FILE}"
+    echo "----------------------------------------" | tee -a "${RESULTS_FILE}"
     
-    # Extract experiment name from config path
-    EXP_NAME=$(basename "$config" .yaml)
-    
-    # Run experiment
-    if python scripts/train.py --config "$config"; then
-        echo "✅ SUCCESS: $EXP_NAME"
-        SUCCESSFUL=$((SUCCESSFUL + 1))
-    else
-        echo "❌ FAILED: $EXP_NAME"
-        FAILED=$((FAILED + 1))
-        # Continue to next experiment even if this one failed
+    # Check if config exists
+    if [ ! -f "${config}" ]; then
+        print_error "Config file not found: ${config}"
+        echo "SKIPPED: Config file not found" | tee -a "${RESULTS_FILE}"
+        echo "" | tee -a "${RESULTS_FILE}"
         continue
     fi
     
-    echo ""
-    echo "Progress: $CURRENT/$TOTAL completed ($SUCCESSFUL successful, $FAILED failed)"
-    echo ""
+    # Create temporary log file for this run
+    TRAIN_LOG="${LOG_DIR}/train_$(basename ${config%.yaml})_$(date +%Y%m%d_%H%M%S).log"
+    EVAL_LOG="${LOG_DIR}/eval_$(basename ${config%.yaml})_$(date +%Y%m%d_%H%M%S).log"
     
-    # Small pause between experiments
-    sleep 5
+    ###########################################################################
+    # Step 1: Training
+    ###########################################################################
+    
+    print_info "Starting training with ${config}..."
+    echo "Training started at: $(date)" | tee -a "${RESULTS_FILE}"
+    
+    if python scripts/train.py --config "${config}" 2>&1 | tee "${TRAIN_LOG}"; then
+        print_success "Training completed successfully"
+        echo "Training completed at: $(date)" | tee -a "${RESULTS_FILE}"
+        
+        # Extract run information
+        RUN_ID=$(extract_run_id "${TRAIN_LOG}")
+        CHECKPOINT_DIR=$(extract_checkpoint_dir "${TRAIN_LOG}")
+        
+        if [ -z "${RUN_ID}" ]; then
+            print_error "Could not extract run ID from training log"
+            echo "ERROR: Could not extract run ID" | tee -a "${RESULTS_FILE}"
+            FAILED=$((FAILED + 1))
+            echo "" | tee -a "${RESULTS_FILE}"
+            continue
+        fi
+        
+        print_info "Run ID: ${RUN_ID}"
+        print_info "Checkpoint directory: ${CHECKPOINT_DIR}"
+        echo "Run ID: ${RUN_ID}" | tee -a "${RESULTS_FILE}"
+        echo "Checkpoint directory: ${CHECKPOINT_DIR}" | tee -a "${RESULTS_FILE}"
+        
+        ###########################################################################
+        # Step 2: Evaluation
+        ###########################################################################
+        
+        print_info "Starting evaluation..."
+        echo "Evaluation started at: $(date)" | tee -a "${RESULTS_FILE}"
+        
+        # Find the best checkpoint
+        BEST_CHECKPOINT=$(find "${CHECKPOINT_DIR}" -name "best-*.ckpt" 2>/dev/null | head -1)
+        
+        if [ -z "${BEST_CHECKPOINT}" ]; then
+            print_error "Best checkpoint not found in ${CHECKPOINT_DIR}"
+            echo "ERROR: Best checkpoint not found" | tee -a "${RESULTS_FILE}"
+            
+            # Try to evaluate from WandB
+            print_info "Attempting to download from WandB..."
+            if python scripts/evaluate.py --wandb-run-id "${RUN_ID}" --config "${config}" --split test 2>&1 | tee "${EVAL_LOG}"; then
+                print_success "Evaluation completed (from WandB)"
+                echo "Evaluation completed at: $(date)" | tee -a "${RESULTS_FILE}"
+                
+                # Extract and save results
+                grep -A 10 "EVALUATION RESULTS" "${EVAL_LOG}" | tee -a "${RESULTS_FILE}"
+                SUCCESSFUL=$((SUCCESSFUL + 1))
+            else
+                print_error "Evaluation failed"
+                echo "ERROR: Evaluation failed" | tee -a "${RESULTS_FILE}"
+                FAILED=$((FAILED + 1))
+            fi
+        else
+            print_info "Using checkpoint: ${BEST_CHECKPOINT}"
+            
+            # Evaluate on test set
+            if python scripts/evaluate.py --checkpoint "${BEST_CHECKPOINT}" --config "${config}" --split test 2>&1 | tee "${EVAL_LOG}"; then
+                print_success "Evaluation completed successfully"
+                echo "Evaluation completed at: $(date)" | tee -a "${RESULTS_FILE}"
+                
+                # Extract and save results
+                grep -A 10 "EVALUATION RESULTS" "${EVAL_LOG}" | tee -a "${RESULTS_FILE}"
+                SUCCESSFUL=$((SUCCESSFUL + 1))
+            else
+                print_error "Evaluation failed"
+                echo "ERROR: Evaluation failed" | tee -a "${RESULTS_FILE}"
+                FAILED=$((FAILED + 1))
+            fi
+        fi
+        
+    else
+        print_error "Training failed for ${config}"
+        echo "ERROR: Training failed" | tee -a "${RESULTS_FILE}"
+        FAILED=$((FAILED + 1))
+    fi
+    
+    echo "" | tee -a "${RESULTS_FILE}"
+    
+    # Optional: Add delay between experiments
+    if [ ${CURRENT} -lt ${TOTAL_CONFIGS} ]; then
+        print_info "Waiting 5 seconds before next experiment..."
+        sleep 5
+    fi
+    
 done
 
-# Calculate total time
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
-HOURS=$((DURATION / 3600))
-MINUTES=$(((DURATION % 3600) / 60))
+###############################################################################
+# Summary
+###############################################################################
 
-echo "=========================================="
-echo "All Experiments Completed!"
-echo "=========================================="
-echo "Total experiments: $TOTAL"
-echo "Successful: $SUCCESSFUL"
-echo "Failed: $FAILED"
-echo "Total time: ${HOURS}h ${MINUTES}m"
-echo "End time: $(date)"
-echo ""
-echo "Results saved in: lightning_logs/"
-echo "View on wandb: https://wandb.ai"
-echo "=========================================="
+echo "" | tee -a "${RESULTS_FILE}"
+print_header "Pipeline Complete!"
+echo "" | tee -a "${RESULTS_FILE}"
+echo "========================================" | tee -a "${RESULTS_FILE}"
+echo "Summary" | tee -a "${RESULTS_FILE}"
+echo "========================================" | tee -a "${RESULTS_FILE}"
+echo "Total experiments: ${TOTAL_CONFIGS}" | tee -a "${RESULTS_FILE}"
+echo "Successful: ${SUCCESSFUL}" | tee -a "${RESULTS_FILE}"
+echo "Failed: ${FAILED}" | tee -a "${RESULTS_FILE}"
+echo "Completion time: $(date)" | tee -a "${RESULTS_FILE}"
+echo "========================================" | tee -a "${RESULTS_FILE}"
+echo "" | tee -a "${RESULTS_FILE}"
+echo "Results saved to: ${RESULTS_FILE}" | tee -a "${RESULTS_FILE}"
 
-# Deactivate conda
-conda deactivate
-
+if [ ${SUCCESSFUL} -eq ${TOTAL_CONFIGS} ]; then
+    print_success "All experiments completed successfully! 🎉"
+    exit 0
+elif [ ${SUCCESSFUL} -gt 0 ]; then
+    print_info "Some experiments completed successfully"
+    exit 1
+else
+    print_error "All experiments failed"
+    exit 1
+fi
