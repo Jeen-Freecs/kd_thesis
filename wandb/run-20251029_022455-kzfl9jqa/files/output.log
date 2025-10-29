@@ -1,0 +1,77 @@
+2025-10-29 02:24:56 - KnowledgeDistillation - INFO - Checkpoints will be saved to: checkpoints/dynamic/Single-ResNet50-alpha0.75/kzfl9jqa
+2025-10-29 02:24:56 - KnowledgeDistillation - INFO - WandB Run ID: kzfl9jqa
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+2025-10-29 02:24:56 - KnowledgeDistillation - INFO - Starting training...
+You are using a CUDA device ('NVIDIA GeForce RTX 4090') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+Files already downloaded and verified
+Files already downloaded and verified
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/utilities/model_summary/model_summary.py:231: Precision 16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name        | Type             | Params | Mode
+---------------------------------------------------------
+0 | student     | EfficientNet     | 2.4 M  | train
+1 | kl_div_loss | KLDivLoss        | 0      | train
+2 | ce_loss     | CrossEntropyLoss | 0      | train
+3 | val_auroc   | MulticlassAUROC  | 0      | train
+4 | test_auroc  | MulticlassAUROC  | 0      | train
+---------------------------------------------------------
+2.4 M     Trainable params
+0         Non-trainable params
+2.4 M     Total params
+9.408     Total estimated model params size (MB)
+293       Modules in train mode
+0         Modules in eval mode
+Sanity Checking DataLoader 0:   0%|          | 0/2 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/workspace/kd_thesis/scripts/train.py", line 107, in <module>
+    main()
+  File "/workspace/kd_thesis/scripts/train.py", line 96, in main
+    trained_module = train_kd_model(
+                     ^^^^^^^^^^^^^^^
+  File "/workspace/kd_thesis/src/training/trainer.py", line 143, in train_kd_model
+    trainer.fit(kd_module, datamodule=data_module)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 560, in fit
+    call._call_and_handle_interrupt(
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/call.py", line 49, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 598, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 1011, in _run
+    results = self._run_stage()
+              ^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 1053, in _run_stage
+    self._run_sanity_check()
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 1082, in _run_sanity_check
+    val_loop.run()
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/loops/utilities.py", line 179, in _decorator
+    return loop_run(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/loops/evaluation_loop.py", line 145, in run
+    self._evaluation_step(batch, batch_idx, dataloader_idx, dataloader_iter)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/loops/evaluation_loop.py", line 437, in _evaluation_step
+    output = call._call_strategy_hook(trainer, hook_name, *step_args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/call.py", line 329, in _call_strategy_hook
+    output = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/strategies/strategy.py", line 412, in validation_step
+    return self.lightning_module.validation_step(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/kd_thesis/src/models/kd_module.py", line 555, in validation_step
+    return self.shared_eval_step(batch, 'val')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/kd_thesis/src/models/kd_module.py", line 534, in shared_eval_step
+    loss = self.compute_losses(student_logits, labels, teacher_logits)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/kd_thesis/src/models/kd_module.py", line 445, in compute_losses
+    weights = self.compute_weights(teacher_logits, labels)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/kd_thesis/src/models/kd_module.py", line 389, in compute_weights
+    weights = (1.0 / (K - 1)) * (1.0 - (exp_losses / sum_exp_losses))
+               ~~~~^~~~~~~~~
+ZeroDivisionError: float division by zero

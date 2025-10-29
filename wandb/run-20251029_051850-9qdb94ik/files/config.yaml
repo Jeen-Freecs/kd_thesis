@@ -1,0 +1,77 @@
+_wandb:
+    value:
+        cli_version: 0.22.2
+        e:
+            l82zw99zdx4aw4e37yauagiqhwom4qbh:
+                args:
+                    - --wandb-run-id
+                    - av6eqh8e
+                    - --config
+                    - configs/method3_densenet_resnet_temp8.yaml
+                    - --split
+                    - test
+                codePath: scripts/evaluate.py
+                codePathLocal: scripts/evaluate.py
+                email: bakridenov.2105666@studenti.uniroma1.it
+                executable: /venv/kd-env/bin/python
+                git:
+                    commit: f352c94cb15e0b931df4c88c140d1cb76c2a7826
+                    remote: https://github.com/Jeen-Freecs/kd_thesis.git
+                host: 23bcb514b0bc
+                os: Linux-6.8.0-49-generic-x86_64-with-glibc2.39
+                program: /workspace/kd_thesis/scripts/evaluate.py
+                python: CPython 3.11.14
+                root: /workspace/kd_thesis
+                startedAt: "2025-10-29T05:18:50.512244Z"
+                writerId: l82zw99zdx4aw4e37yauagiqhwom4qbh
+        m: []
+        python_version: 3.11.14
+        t:
+            "1":
+                - 1
+                - 5
+                - 9
+                - 41
+                - 49
+                - 53
+                - 63
+                - 103
+            "2":
+                - 1
+                - 5
+                - 9
+                - 41
+                - 49
+                - 53
+                - 63
+                - 103
+            "3":
+                - 2
+                - 13
+                - 15
+                - 16
+                - 62
+            "4": 3.11.14
+            "5": 0.22.2
+            "12": 0.22.2
+            "13": linux-x86_64
+checkpoint:
+    value: /workspace/kd_thesis/artifacts/model-av6eqh8e:v93/model.ckpt
+config_file:
+    value: configs/method3_densenet_resnet_temp8.yaml
+device:
+    value: cuda
+kd_type:
+    value: confidence
+run_id:
+    value: av6eqh8e
+split:
+    value: test
+student_model:
+    value: mobilenetv2_100
+teacher_models:
+    value:
+        - densenet121_cifar100
+        - resnet50_cifar100
+temperature:
+    value: 8

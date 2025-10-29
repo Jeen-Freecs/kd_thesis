@@ -1,0 +1,1 @@
+{"val/accuracy":0.4528000056743622,"trainer/global_step":1759,"_step":44,"val/loss_total":2.0283610820770264,"_timestamp":1.761684399662542e+09,"_wandb":{"runtime":163},"val/auroc":0.965971052646637,"_runtime":163,"train/loss_total_step":2.2389814853668213,"train/loss_total_epoch":2.0252835750579834,"epoch":4}

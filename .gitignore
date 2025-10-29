@@ -16,6 +16,8 @@ build/
 # Data
 data/
 
+logs/
+
 # Environment
 venv/
 env/

@@ -1,0 +1,164 @@
+2025-10-28 22:27:56 - KnowledgeDistillation - INFO - Checkpoints will be saved to: checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e
+2025-10-28 22:27:56 - KnowledgeDistillation - INFO - WandB Run ID: i9skbi4e
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+2025-10-28 22:27:56 - KnowledgeDistillation - INFO - Starting training...
+You are using a CUDA device ('NVIDIA GeForce RTX 4090') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+Files already downloaded and verified
+Files already downloaded and verified
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/utilities/model_summary/model_summary.py:231: Precision 16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name        | Type             | Params | Mode
+---------------------------------------------------------
+0 | student     | EfficientNet     | 2.4 M  | train
+1 | kl_div_loss | KLDivLoss        | 0      | train
+2 | ce_loss     | CrossEntropyLoss | 0      | train
+3 | val_auroc   | MulticlassAUROC  | 0      | train
+4 | test_auroc  | MulticlassAUROC  | 0      | train
+---------------------------------------------------------
+2.4 M     Trainable params
+0         Non-trainable params
+2.4 M     Total params
+9.408     Total estimated model params size (MB)
+293       Modules in train mode
+0         Modules in eval mode
+Epoch 14: 100%|██████████| 352/352 [01:57<00:00,  3.01it/s, v_num=bi4e, train/loss_kl_step=3.160, train/loss_ce_step=0.915, train/loss_total_step=4.080, train/loss_kl=3.790, train/loss_ce=1.350, train/loss_total=5.140, val/auroc=0.986, val/accuracy=0.645, val/loss_total=5.140, train/loss_kl_epoch=3.230, train/loss_ce_epoch=0.840, train/loss_total_epoch=4.070]
+/venv/kd-env/lib/python3.11/site-packages/torchmetrics/utilities/prints.py:43: UserWarning: No positive samples in targets, true positive value should be meaningless. Returning zero tensor in true positive score
+  warnings.warn(*args, **kwargs)
+                                                                        
+Metric val/accuracy improved. New best score: 0.192
+Epoch 0, global step 352: 'val/accuracy' reached 0.19240 (best 0.19240), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.120 >= min_delta = 0.0. New best score: 0.313
+Epoch 1, global step 704: 'val/accuracy' reached 0.31260 (best 0.31260), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.079 >= min_delta = 0.0. New best score: 0.392
+Epoch 2, global step 1056: 'val/accuracy' reached 0.39180 (best 0.39180), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.033 >= min_delta = 0.0. New best score: 0.425
+Epoch 3, global step 1408: 'val/accuracy' reached 0.42500 (best 0.42500), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.069 >= min_delta = 0.0. New best score: 0.494
+Epoch 4, global step 1760: 'val/accuracy' reached 0.49440 (best 0.49440), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.016 >= min_delta = 0.0. New best score: 0.510
+Epoch 5, global step 2112: 'val/accuracy' reached 0.51040 (best 0.51040), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.021 >= min_delta = 0.0. New best score: 0.532
+Epoch 6, global step 2464: 'val/accuracy' reached 0.53160 (best 0.53160), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.029 >= min_delta = 0.0. New best score: 0.561
+Epoch 7, global step 2816: 'val/accuracy' reached 0.56100 (best 0.56100), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.029 >= min_delta = 0.0. New best score: 0.590
+Epoch 8, global step 3168: 'val/accuracy' reached 0.59020 (best 0.59020), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.008 >= min_delta = 0.0. New best score: 0.598
+Epoch 9, global step 3520: 'val/accuracy' reached 0.59800 (best 0.59800), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.006 >= min_delta = 0.0. New best score: 0.604
+Epoch 10, global step 3872: 'val/accuracy' reached 0.60440 (best 0.60440), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.017 >= min_delta = 0.0. New best score: 0.621
+Epoch 11, global step 4224: 'val/accuracy' reached 0.62140 (best 0.62140), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.011 >= min_delta = 0.0. New best score: 0.633
+Epoch 12, global step 4576: 'val/accuracy' reached 0.63260 (best 0.63260), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.634
+Epoch 13, global step 4928: 'val/accuracy' reached 0.63360 (best 0.63360), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.012 >= min_delta = 0.0. New best score: 0.645
+Epoch 14, global step 5280: 'val/accuracy' reached 0.64520 (best 0.64520), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.011 >= min_delta = 0.0. New best score: 0.656
+Epoch 15, global step 5632: 'val/accuracy' reached 0.65640 (best 0.65640), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.006 >= min_delta = 0.0. New best score: 0.662
+Epoch 16, global step 5984: 'val/accuracy' reached 0.66200 (best 0.66200), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.010 >= min_delta = 0.0. New best score: 0.672
+Epoch 17, global step 6336: 'val/accuracy' reached 0.67180 (best 0.67180), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 18, global step 6688: 'val/accuracy' was not in top 1
+Epoch 19, global step 7040: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.007 >= min_delta = 0.0. New best score: 0.679
+Epoch 20, global step 7392: 'val/accuracy' reached 0.67900 (best 0.67900), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 21, global step 7744: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.008 >= min_delta = 0.0. New best score: 0.687
+Epoch 22, global step 8096: 'val/accuracy' reached 0.68700 (best 0.68700), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.007 >= min_delta = 0.0. New best score: 0.694
+Epoch 23, global step 8448: 'val/accuracy' reached 0.69400 (best 0.69400), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 24, global step 8800: 'val/accuracy' was not in top 1
+Epoch 25, global step 9152: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.007 >= min_delta = 0.0. New best score: 0.701
+Epoch 26, global step 9504: 'val/accuracy' reached 0.70120 (best 0.70120), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.007 >= min_delta = 0.0. New best score: 0.708
+Epoch 27, global step 9856: 'val/accuracy' reached 0.70820 (best 0.70820), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 28, global step 10208: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.710
+Epoch 29, global step 10560: 'val/accuracy' reached 0.70960 (best 0.70960), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 30, global step 10912: 'val/accuracy' was not in top 1
+Epoch 31, global step 11264: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.710
+Epoch 32, global step 11616: 'val/accuracy' reached 0.71020 (best 0.71020), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.715
+Epoch 33, global step 11968: 'val/accuracy' reached 0.71500 (best 0.71500), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 34, global step 12320: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.719
+Epoch 35, global step 12672: 'val/accuracy' reached 0.71900 (best 0.71900), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 36, global step 13024: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.006 >= min_delta = 0.0. New best score: 0.725
+Epoch 37, global step 13376: 'val/accuracy' reached 0.72520 (best 0.72520), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 38, global step 13728: 'val/accuracy' was not in top 1
+Epoch 39, global step 14080: 'val/accuracy' was not in top 1
+Epoch 40, global step 14432: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.000 >= min_delta = 0.0. New best score: 0.725
+Epoch 41, global step 14784: 'val/accuracy' reached 0.72540 (best 0.72540), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.006 >= min_delta = 0.0. New best score: 0.731
+Epoch 42, global step 15136: 'val/accuracy' reached 0.73140 (best 0.73140), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 43, global step 15488: 'val/accuracy' was not in top 1
+Epoch 44, global step 15840: 'val/accuracy' was not in top 1
+Epoch 45, global step 16192: 'val/accuracy' was not in top 1
+Epoch 46, global step 16544: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.733
+Epoch 47, global step 16896: 'val/accuracy' reached 0.73320 (best 0.73320), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 48, global step 17248: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.734
+Epoch 49, global step 17600: 'val/accuracy' reached 0.73420 (best 0.73420), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 50, global step 17952: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.735
+Epoch 51, global step 18304: 'val/accuracy' reached 0.73500 (best 0.73500), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 52, global step 18656: 'val/accuracy' was not in top 1
+Epoch 53, global step 19008: 'val/accuracy' was not in top 1
+Epoch 54, global step 19360: 'val/accuracy' was not in top 1
+Epoch 55, global step 19712: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.737
+Epoch 56, global step 20064: 'val/accuracy' reached 0.73700 (best 0.73700), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 57, global step 20416: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.008 >= min_delta = 0.0. New best score: 0.745
+Epoch 58, global step 20768: 'val/accuracy' reached 0.74500 (best 0.74500), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 59, global step 21120: 'val/accuracy' was not in top 1
+Epoch 60, global step 21472: 'val/accuracy' was not in top 1
+Epoch 61, global step 21824: 'val/accuracy' was not in top 1
+Epoch 62, global step 22176: 'val/accuracy' was not in top 1
+Epoch 63, global step 22528: 'val/accuracy' was not in top 1
+Epoch 64, global step 22880: 'val/accuracy' was not in top 1
+Epoch 65, global step 23232: 'val/accuracy' was not in top 1
+Epoch 66, global step 23584: 'val/accuracy' was not in top 1
+Epoch 67, global step 23936: 'val/accuracy' was not in top 1
+Epoch 68, global step 24288: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.747
+Epoch 69, global step 24640: 'val/accuracy' reached 0.74680 (best 0.74680), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 70, global step 24992: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.748
+Epoch 71, global step 25344: 'val/accuracy' reached 0.74800 (best 0.74800), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Metric val/accuracy improved by 0.007 >= min_delta = 0.0. New best score: 0.755
+Epoch 72, global step 25696: 'val/accuracy' reached 0.75460 (best 0.75460), saving model to '/workspace/kd_thesis/checkpoints/ca_weighted/Method1-CA-WKD-ResNet-DenseNet-ViT/i9skbi4e/best.ckpt' as top 1
+Epoch 73, global step 26048: 'val/accuracy' was not in top 1
+Epoch 74, global step 26400: 'val/accuracy' was not in top 1
+Epoch 75, global step 26752: 'val/accuracy' was not in top 1
+Epoch 76, global step 27104: 'val/accuracy' was not in top 1
+Epoch 77, global step 27456: 'val/accuracy' was not in top 1
+Epoch 78, global step 27808: 'val/accuracy' was not in top 1
+Epoch 79, global step 28160: 'val/accuracy' was not in top 1
+Epoch 80, global step 28512: 'val/accuracy' was not in top 1
+Epoch 81, global step 28864: 'val/accuracy' was not in top 1
+Epoch 82, global step 29216: 'val/accuracy' was not in top 1
+Epoch 83, global step 29568: 'val/accuracy' was not in top 1
+Epoch 84, global step 29920: 'val/accuracy' was not in top 1
+Epoch 85, global step 30272: 'val/accuracy' was not in top 1
+Epoch 86, global step 30624: 'val/accuracy' was not in top 1
+Epoch 87, global step 30976: 'val/accuracy' was not in top 1
+Epoch 88, global step 31328: 'val/accuracy' was not in top 1
+Epoch 89, global step 31680: 'val/accuracy' was not in top 1
+Epoch 90, global step 32032: 'val/accuracy' was not in top 1
+Epoch 91, global step 32384: 'val/accuracy' was not in top 1
+Monitored metric val/accuracy did not improve in the last 20 records. Best score: 0.755. Signaling Trainer to stop.
+Epoch 92, global step 32736: 'val/accuracy' was not in top 1
+2025-10-29 01:29:52 - KnowledgeDistillation - INFO - Training completed successfully!

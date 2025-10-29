@@ -1,0 +1,42 @@
+2025-10-28 20:43:58 - KnowledgeDistillation - INFO - Checkpoints will be saved to: checkpoints/baseline/MobileNetV2-Baseline/2cy03dg2
+2025-10-28 20:43:58 - KnowledgeDistillation - INFO - WandB Run ID: 2cy03dg2
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+2025-10-28 20:43:58 - KnowledgeDistillation - INFO - Starting training...
+You are using a CUDA device ('NVIDIA GeForce RTX 4090') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+Downloading https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz to ./data/cifar-100-python.tar.gz
+100%|██████████| 169M/169M [00:20<00:00, 8.35MB/s] 
+Extracting ./data/cifar-100-python.tar.gz to ./data
+Files already downloaded and verified
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/utilities/model_summary/model_summary.py:231: Precision 16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type             | Params | Mode
+--------------------------------------------------------
+0 | student    | EfficientNet     | 2.4 M  | train
+1 | ce_loss    | CrossEntropyLoss | 0      | train
+2 | val_auroc  | MulticlassAUROC  | 0      | train
+3 | test_auroc | MulticlassAUROC  | 0      | train
+--------------------------------------------------------
+2.4 M     Trainable params
+0         Non-trainable params
+2.4 M     Total params
+9.408     Total estimated model params size (MB)
+292       Modules in train mode
+0         Modules in eval mode
+Epoch 5:  11%|█         | 37/352 [00:02<00:23, 13.60it/s, v_num=3dg2, train/loss_total_step=1.690, val/auroc=0.966, val/accuracy=0.453, val/loss_total=2.030, train/loss_total_epoch=2.030] 
+/venv/kd-env/lib/python3.11/site-packages/torchmetrics/utilities/prints.py:43: UserWarning: No positive samples in targets, true positive value should be meaningless. Returning zero tensor in true positive score
+  warnings.warn(*args, **kwargs)
+                                                                        
+Metric val/accuracy improved. New best score: 0.174
+Epoch 0, global step 352: 'val/accuracy' reached 0.17360 (best 0.17360), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/2cy03dg2/best-epoch=epoch=00-val_acc=val/accuracy=0.1736.ckpt' as top 1
+Metric val/accuracy improved by 0.095 >= min_delta = 0.0. New best score: 0.269
+Epoch 1, global step 704: 'val/accuracy' reached 0.26860 (best 0.26860), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/2cy03dg2/best-epoch=epoch=01-val_acc=val/accuracy=0.2686.ckpt' as top 1
+Metric val/accuracy improved by 0.086 >= min_delta = 0.0. New best score: 0.354
+Epoch 2, global step 1056: 'val/accuracy' reached 0.35440 (best 0.35440), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/2cy03dg2/best-epoch=epoch=02-val_acc=val/accuracy=0.3544.ckpt' as top 1
+Metric val/accuracy improved by 0.051 >= min_delta = 0.0. New best score: 0.406
+Epoch 3, global step 1408: 'val/accuracy' reached 0.40560 (best 0.40560), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/2cy03dg2/best-epoch=epoch=03-val_acc=val/accuracy=0.4056.ckpt' as top 1
+Metric val/accuracy improved by 0.047 >= min_delta = 0.0. New best score: 0.453
+Epoch 4, global step 1760: 'val/accuracy' reached 0.45280 (best 0.45280), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/2cy03dg2/best-epoch=epoch=04-val_acc=val/accuracy=0.4528.ckpt' as top 1

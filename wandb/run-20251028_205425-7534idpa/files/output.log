@@ -1,0 +1,220 @@
+2025-10-28 20:54:26 - KnowledgeDistillation - INFO - Checkpoints will be saved to: checkpoints/baseline/MobileNetV2-Baseline/7534idpa
+2025-10-28 20:54:26 - KnowledgeDistillation - INFO - WandB Run ID: 7534idpa
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+2025-10-28 20:54:26 - KnowledgeDistillation - INFO - Starting training...
+You are using a CUDA device ('NVIDIA GeForce RTX 4090') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+Files already downloaded and verified
+Files already downloaded and verified
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/utilities/model_summary/model_summary.py:231: Precision 16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type             | Params | Mode
+--------------------------------------------------------
+0 | student    | EfficientNet     | 2.4 M  | train
+1 | ce_loss    | CrossEntropyLoss | 0      | train
+2 | val_auroc  | MulticlassAUROC  | 0      | train
+3 | test_auroc | MulticlassAUROC  | 0      | train
+--------------------------------------------------------
+2.4 M     Trainable params
+0         Non-trainable params
+2.4 M     Total params
+9.408     Total estimated model params size (MB)
+292       Modules in train mode
+0         Modules in eval mode
+Epoch 14: 100%|██████████| 352/352 [00:24<00:00, 14.27it/s, v_num=idpa, train/loss_total_step=1.250, val/auroc=0.984, val/accuracy=0.591, val/loss_total=1.480, train/loss_total_epoch=0.976]
+/venv/kd-env/lib/python3.11/site-packages/torchmetrics/utilities/prints.py:43: UserWarning: No positive samples in targets, true positive value should be meaningless. Returning zero tensor in true positive score
+  warnings.warn(*args, **kwargs)
+                                                                        
+Metric val/accuracy improved. New best score: 0.162
+Epoch 0, global step 352: 'val/accuracy' reached 0.16200 (best 0.16200), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=00-val_acc=val/accuracy=0.1620.ckpt' as top 1
+Metric val/accuracy improved by 0.114 >= min_delta = 0.0. New best score: 0.276
+Epoch 1, global step 704: 'val/accuracy' reached 0.27560 (best 0.27560), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=01-val_acc=val/accuracy=0.2756.ckpt' as top 1
+Metric val/accuracy improved by 0.090 >= min_delta = 0.0. New best score: 0.366
+Epoch 2, global step 1056: 'val/accuracy' reached 0.36560 (best 0.36560), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=02-val_acc=val/accuracy=0.3656.ckpt' as top 1
+Metric val/accuracy improved by 0.045 >= min_delta = 0.0. New best score: 0.410
+Epoch 3, global step 1408: 'val/accuracy' reached 0.41020 (best 0.41020), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=03-val_acc=val/accuracy=0.4102.ckpt' as top 1
+Metric val/accuracy improved by 0.029 >= min_delta = 0.0. New best score: 0.439
+Epoch 4, global step 1760: 'val/accuracy' reached 0.43940 (best 0.43940), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=04-val_acc=val/accuracy=0.4394.ckpt' as top 1
+Metric val/accuracy improved by 0.030 >= min_delta = 0.0. New best score: 0.470
+Epoch 5, global step 2112: 'val/accuracy' reached 0.46980 (best 0.46980), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=05-val_acc=val/accuracy=0.4698.ckpt' as top 1
+Metric val/accuracy improved by 0.035 >= min_delta = 0.0. New best score: 0.504
+Epoch 6, global step 2464: 'val/accuracy' reached 0.50440 (best 0.50440), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=06-val_acc=val/accuracy=0.5044.ckpt' as top 1
+Metric val/accuracy improved by 0.019 >= min_delta = 0.0. New best score: 0.523
+Epoch 7, global step 2816: 'val/accuracy' reached 0.52300 (best 0.52300), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=07-val_acc=val/accuracy=0.5230.ckpt' as top 1
+Metric val/accuracy improved by 0.027 >= min_delta = 0.0. New best score: 0.550
+Epoch 8, global step 3168: 'val/accuracy' reached 0.54960 (best 0.54960), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=08-val_acc=val/accuracy=0.5496.ckpt' as top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.550
+Epoch 9, global step 3520: 'val/accuracy' reached 0.55020 (best 0.55020), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=09-val_acc=val/accuracy=0.5502.ckpt' as top 1
+Metric val/accuracy improved by 0.032 >= min_delta = 0.0. New best score: 0.582
+Epoch 10, global step 3872: 'val/accuracy' reached 0.58200 (best 0.58200), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=10-val_acc=val/accuracy=0.5820.ckpt' as top 1
+Metric val/accuracy improved by 0.003 >= min_delta = 0.0. New best score: 0.585
+Epoch 11, global step 4224: 'val/accuracy' reached 0.58460 (best 0.58460), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=11-val_acc=val/accuracy=0.5846.ckpt' as top 1
+Epoch 12, global step 4576: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.589
+Epoch 13, global step 4928: 'val/accuracy' reached 0.58860 (best 0.58860), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=13-val_acc=val/accuracy=0.5886.ckpt' as top 1
+Metric val/accuracy improved by 0.003 >= min_delta = 0.0. New best score: 0.591
+Epoch 14, global step 5280: 'val/accuracy' reached 0.59140 (best 0.59140), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=14-val_acc=val/accuracy=0.5914.ckpt' as top 1
+wandb: WARNING A graphql request initiated by the public wandb API timed out (timeout=19 sec). Create a new API with an integer timeout larger than 19, e.g., `api = wandb.Api(timeout=29)` to increase the graphql timeout.
+Metric val/accuracy improved by 0.016 >= min_delta = 0.0. New best score: 0.608
+Epoch 15, global step 5632: 'val/accuracy' reached 0.60760 (best 0.60760), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=15-val_acc=val/accuracy=0.6076.ckpt' as top 1
+Metric val/accuracy improved by 0.006 >= min_delta = 0.0. New best score: 0.614
+Epoch 16, global step 5984: 'val/accuracy' reached 0.61360 (best 0.61360), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=16-val_acc=val/accuracy=0.6136.ckpt' as top 1
+Metric val/accuracy improved by 0.014 >= min_delta = 0.0. New best score: 0.627
+Epoch 17, global step 6336: 'val/accuracy' reached 0.62720 (best 0.62720), saving model to '/workspace/kd_thesis/checkpoints/baseline/MobileNetV2-Baseline/7534idpa/best-epoch=epoch=17-val_acc=val/accuracy=0.6272.ckpt' as top 1
+wandb: ERROR An error occurred while verifying the API key.
+Traceback (most recent call last):
+  File "/venv/kd-env/lib/python3.11/site-packages/urllib3/connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/urllib3/connection.py", line 565, in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/http/client.py", line 1395, in getresponse
+    response.begin()
+  File "/venv/kd-env/lib/python3.11/http/client.py", line 325, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/http/client.py", line 286, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/socket.py", line 718, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/ssl.py", line 1314, in recv_into
+    return self.read(nbytes, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/ssl.py", line 1166, in read
+    return self._sslobj.read(len, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TimeoutError: The read operation timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/venv/kd-env/lib/python3.11/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/urllib3/util/retry.py", line 474, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/urllib3/util/util.py", line 39, in reraise
+    raise value
+  File "/venv/kd-env/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/urllib3/connectionpool.py", line 536, in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=read_timeout)
+  File "/venv/kd-env/lib/python3.11/site-packages/urllib3/connectionpool.py", line 367, in _raise_timeout
+    raise ReadTimeoutError(
+urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='api.wandb.ai', port=443): Read timed out. (read timeout=20)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_login.py", line 344, in _verify_login
+    is_api_key_valid = api.validate_api_key()
+                       ^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/apis/internal.py", line 70, in validate_api_key
+    return self.api.validate_api_key()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/internal/internal_api.py", line 409, in validate_api_key
+    res = self.execute(gql("query { viewer { id } }"))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/internal/internal_api.py", line 398, in execute
+    return self.client.execute(*args, **kwargs)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/vendor/gql-0.2.0/wandb_gql/client.py", line 52, in execute
+    result = self._get_result(document, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/vendor/gql-0.2.0/wandb_gql/client.py", line 60, in _get_result
+    return self.transport.execute(document, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/lib/gql_request.py", line 69, in execute
+    request = self.session.post(self.url, **post_args)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/requests/sessions.py", line 637, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/requests/adapters.py", line 690, in send
+    raise ReadTimeout(e, request=request)
+requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='api.wandb.ai', port=443): Read timed out. (read timeout=20)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/kd_thesis/scripts/train.py", line 107, in <module>
+    main()
+  File "/workspace/kd_thesis/scripts/train.py", line 96, in main
+    trained_module = train_kd_model(
+                     ^^^^^^^^^^^^^^^
+  File "/workspace/kd_thesis/src/training/trainer.py", line 114, in train_kd_model
+    trainer.fit(kd_module, datamodule=data_module)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 560, in fit
+    call._call_and_handle_interrupt(
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/call.py", line 49, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 598, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 1011, in _run
+    results = self._run_stage()
+              ^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/trainer.py", line 1055, in _run_stage
+    self.fit_loop.run()
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/loops/fit_loop.py", line 217, in run
+    self.on_advance_end()
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/loops/fit_loop.py", line 473, in on_advance_end
+    call._call_callback_hooks(trainer, "on_train_epoch_end", monitoring_callbacks=True)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/trainer/call.py", line 228, in _call_callback_hooks
+    fn(trainer, trainer.lightning_module, *args, **kwargs)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/callbacks/model_checkpoint.py", line 380, in on_train_epoch_end
+    self._save_topk_checkpoint(trainer, monitor_candidates)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/callbacks/model_checkpoint.py", line 468, in _save_topk_checkpoint
+    self._save_monitor_checkpoint(trainer, monitor_candidates)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/callbacks/model_checkpoint.py", line 802, in _save_monitor_checkpoint
+    self._update_best_and_save(current, trainer, monitor_candidates)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/callbacks/model_checkpoint.py", line 854, in _update_best_and_save
+    self._save_checkpoint(trainer, filepath)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/callbacks/model_checkpoint.py", line 481, in _save_checkpoint
+    logger.after_save_checkpoint(proxy(self))
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/loggers/wandb.py", line 592, in after_save_checkpoint
+    self._scan_and_log_checkpoints(checkpoint_callback)
+  File "/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/loggers/wandb.py", line 681, in _scan_and_log_checkpoints
+    self.experiment.log_artifact(artifact, aliases=aliases)
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 399, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 457, in wrapper_fn
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 444, in wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 3175, in log_artifact
+    return self._log_artifact(
+           ^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 3326, in _log_artifact
+    self._assert_can_log_artifact(artifact)
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 3374, in _assert_can_log_artifact
+    public_api = self._public_api()
+                 ^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_run.py", line 3367, in _public_api
+    return public.Api(overrides)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/apis/public/api.py", line 321, in __init__
+    wandb_login._verify_login(
+  File "/venv/kd-env/lib/python3.11/site-packages/wandb/sdk/wandb_login.py", line 350, in _verify_login
+    raise AuthenticationError(
+wandb.errors.errors.AuthenticationError: An error occurred while verifying the API key.

@@ -1,0 +1,44 @@
+{
+  "os": "Linux-6.8.0-49-generic-x86_64-with-glibc2.39",
+  "python": "CPython 3.11.14",
+  "startedAt": "2025-10-28T22:27:55.479225Z",
+  "args": [
+    "--config",
+    "configs/method1_ca_wkd.yaml"
+  ],
+  "program": "/workspace/kd_thesis/scripts/train.py",
+  "codePath": "scripts/train.py",
+  "codePathLocal": "scripts/train.py",
+  "git": {
+    "remote": "https://github.com/Jeen-Freecs/kd_thesis.git",
+    "commit": "f352c94cb15e0b931df4c88c140d1cb76c2a7826"
+  },
+  "email": "bakridenov.2105666@studenti.uniroma1.it",
+  "root": ".",
+  "host": "23bcb514b0bc",
+  "executable": "/venv/kd-env/bin/python",
+  "cpu_count": 6,
+  "cpu_count_logical": 12,
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "113816633344",
+      "used": "16585273344"
+    }
+  },
+  "memory": {
+    "total": "33569599488"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 4090",
+      "memoryTotal": "25757220864",
+      "cudaCores": 16384,
+      "architecture": "Ada",
+      "uuid": "GPU-88917c94-eb1e-7aea-0ae3-72da76491c6d"
+    }
+  ],
+  "cudaVersion": "12.6",
+  "writerId": "vy1yilloikuka1dj8qa6a1j66cn3veeb"
+}

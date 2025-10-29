@@ -1,0 +1,25 @@
+{
+  "os": "Linux-6.8.0-49-generic-x86_64-with-glibc2.39",
+  "python": "CPython 3.11.14",
+  "startedAt": "2025-10-29T06:44:11.069299Z",
+  "args": [
+    "--wandb-run-id",
+    "f72z6pgg",
+    "--config",
+    "configs/method3_densenet_resnet_temp16.yaml",
+    "--split",
+    "test"
+  ],
+  "program": "/workspace/kd_thesis/scripts/evaluate.py",
+  "codePath": "scripts/evaluate.py",
+  "codePathLocal": "scripts/evaluate.py",
+  "git": {
+    "remote": "https://github.com/Jeen-Freecs/kd_thesis.git",
+    "commit": "f352c94cb15e0b931df4c88c140d1cb76c2a7826"
+  },
+  "email": "bakridenov.2105666@studenti.uniroma1.it",
+  "root": "/workspace/kd_thesis",
+  "host": "23bcb514b0bc",
+  "executable": "/venv/kd-env/bin/python",
+  "writerId": "ilwca25b7z1zpmghvkgzfczilsick8ks"
+}

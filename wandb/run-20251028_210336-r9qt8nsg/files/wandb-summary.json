@@ -1,0 +1,1 @@
+{"test/loss":1.3865929881095886,"test_accuracy":0.6218,"test_accuracy_percent":62.18,"test/accuracy_percent":62.18,"test/total":10000,"test_loss":1.3865929881095886,"_wandb":{"runtime":0},"_runtime":0,"test/accuracy":0.6218,"test/correct":6218,"checkpoint_path":"/workspace/kd_thesis/artifacts/model-7534idpa:v17/model.ckpt","_timestamp":1.7616854174288602e+09,"_step":0}

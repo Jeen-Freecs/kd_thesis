@@ -1,0 +1,165 @@
+2025-10-28 21:34:54 - KnowledgeDistillation - INFO - Checkpoints will be saved to: checkpoints/baseline/Baseline-MobileNetV2/gc7agbej
+2025-10-28 21:34:54 - KnowledgeDistillation - INFO - WandB Run ID: gc7agbej
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+2025-10-28 21:34:54 - KnowledgeDistillation - INFO - Starting training...
+You are using a CUDA device ('NVIDIA GeForce RTX 4090') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+Files already downloaded and verified
+Files already downloaded and verified
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/utilities/model_summary/model_summary.py:231: Precision 16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name       | Type             | Params | Mode
+--------------------------------------------------------
+0 | student    | EfficientNet     | 2.4 M  | train
+1 | ce_loss    | CrossEntropyLoss | 0      | train
+2 | val_auroc  | MulticlassAUROC  | 0      | train
+3 | test_auroc | MulticlassAUROC  | 0      | train
+--------------------------------------------------------
+2.4 M     Trainable params
+0         Non-trainable params
+2.4 M     Total params
+9.408     Total estimated model params size (MB)
+292       Modules in train mode
+0         Modules in eval mode
+Epoch 14: 100%|██████████| 352/352 [00:24<00:00, 14.09it/s, v_num=gbej, train/loss_total_step=1.360, val/auroc=0.985, val/accuracy=0.608, val/loss_total=1.450, train/loss_total_epoch=0.969]
+/venv/kd-env/lib/python3.11/site-packages/torchmetrics/utilities/prints.py:43: UserWarning: No positive samples in targets, true positive value should be meaningless. Returning zero tensor in true positive score
+  warnings.warn(*args, **kwargs)
+                                                                        
+Metric val/accuracy improved. New best score: 0.181
+Epoch 0, global step 352: 'val/accuracy' reached 0.18100 (best 0.18100), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.100 >= min_delta = 0.0. New best score: 0.281
+Epoch 1, global step 704: 'val/accuracy' reached 0.28140 (best 0.28140), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.073 >= min_delta = 0.0. New best score: 0.354
+Epoch 2, global step 1056: 'val/accuracy' reached 0.35400 (best 0.35400), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.062 >= min_delta = 0.0. New best score: 0.416
+Epoch 3, global step 1408: 'val/accuracy' reached 0.41600 (best 0.41600), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.030 >= min_delta = 0.0. New best score: 0.446
+Epoch 4, global step 1760: 'val/accuracy' reached 0.44640 (best 0.44640), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.014 >= min_delta = 0.0. New best score: 0.460
+Epoch 5, global step 2112: 'val/accuracy' reached 0.46020 (best 0.46020), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.049 >= min_delta = 0.0. New best score: 0.509
+Epoch 6, global step 2464: 'val/accuracy' reached 0.50940 (best 0.50940), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.017 >= min_delta = 0.0. New best score: 0.526
+Epoch 7, global step 2816: 'val/accuracy' reached 0.52640 (best 0.52640), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.000 >= min_delta = 0.0. New best score: 0.527
+Epoch 8, global step 3168: 'val/accuracy' reached 0.52660 (best 0.52660), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.041 >= min_delta = 0.0. New best score: 0.567
+Epoch 9, global step 3520: 'val/accuracy' reached 0.56740 (best 0.56740), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.010 >= min_delta = 0.0. New best score: 0.577
+Epoch 10, global step 3872: 'val/accuracy' reached 0.57740 (best 0.57740), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 11, global step 4224: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.012 >= min_delta = 0.0. New best score: 0.590
+Epoch 12, global step 4576: 'val/accuracy' reached 0.58980 (best 0.58980), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.594
+Epoch 13, global step 4928: 'val/accuracy' reached 0.59380 (best 0.59380), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.015 >= min_delta = 0.0. New best score: 0.608
+Epoch 14, global step 5280: 'val/accuracy' reached 0.60840 (best 0.60840), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.612
+Epoch 15, global step 5632: 'val/accuracy' reached 0.61220 (best 0.61220), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 16, global step 5984: 'val/accuracy' was not in top 1
+Epoch 17, global step 6336: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.011 >= min_delta = 0.0. New best score: 0.623
+Epoch 18, global step 6688: 'val/accuracy' reached 0.62300 (best 0.62300), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.006 >= min_delta = 0.0. New best score: 0.629
+Epoch 19, global step 7040: 'val/accuracy' reached 0.62900 (best 0.62900), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.003 >= min_delta = 0.0. New best score: 0.632
+Epoch 20, global step 7392: 'val/accuracy' reached 0.63200 (best 0.63200), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 21, global step 7744: 'val/accuracy' was not in top 1
+Epoch 22, global step 8096: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.636
+Epoch 23, global step 8448: 'val/accuracy' reached 0.63600 (best 0.63600), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.637
+Epoch 24, global step 8800: 'val/accuracy' reached 0.63720 (best 0.63720), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 25, global step 9152: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.009 >= min_delta = 0.0. New best score: 0.646
+Epoch 26, global step 9504: 'val/accuracy' reached 0.64620 (best 0.64620), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 27, global step 9856: 'val/accuracy' was not in top 1
+Epoch 28, global step 10208: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.651
+Epoch 29, global step 10560: 'val/accuracy' reached 0.65080 (best 0.65080), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 30, global step 10912: 'val/accuracy' was not in top 1
+Epoch 31, global step 11264: 'val/accuracy' was not in top 1
+Epoch 32, global step 11616: 'val/accuracy' was not in top 1
+Epoch 33, global step 11968: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.000 >= min_delta = 0.0. New best score: 0.651
+Epoch 34, global step 12320: 'val/accuracy' reached 0.65120 (best 0.65120), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 35, global step 12672: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.652
+Epoch 36, global step 13024: 'val/accuracy' reached 0.65220 (best 0.65220), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.009 >= min_delta = 0.0. New best score: 0.661
+Epoch 37, global step 13376: 'val/accuracy' reached 0.66080 (best 0.66080), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 38, global step 13728: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.662
+Epoch 39, global step 14080: 'val/accuracy' reached 0.66240 (best 0.66240), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 40, global step 14432: 'val/accuracy' was not in top 1
+Epoch 41, global step 14784: 'val/accuracy' was not in top 1
+Epoch 42, global step 15136: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.000 >= min_delta = 0.0. New best score: 0.663
+Epoch 43, global step 15488: 'val/accuracy' reached 0.66280 (best 0.66280), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 44, global step 15840: 'val/accuracy' was not in top 1
+Epoch 45, global step 16192: 'val/accuracy' was not in top 1
+Epoch 46, global step 16544: 'val/accuracy' was not in top 1
+Epoch 47, global step 16896: 'val/accuracy' was not in top 1
+Epoch 48, global step 17248: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.003 >= min_delta = 0.0. New best score: 0.666
+Epoch 49, global step 17600: 'val/accuracy' reached 0.66560 (best 0.66560), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 50, global step 17952: 'val/accuracy' was not in top 1
+Epoch 51, global step 18304: 'val/accuracy' was not in top 1
+Epoch 52, global step 18656: 'val/accuracy' was not in top 1
+Epoch 53, global step 19008: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.666
+Epoch 54, global step 19360: 'val/accuracy' reached 0.66640 (best 0.66640), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.011 >= min_delta = 0.0. New best score: 0.677
+Epoch 55, global step 19712: 'val/accuracy' reached 0.67740 (best 0.67740), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 56, global step 20064: 'val/accuracy' was not in top 1
+Epoch 57, global step 20416: 'val/accuracy' was not in top 1
+Epoch 58, global step 20768: 'val/accuracy' was not in top 1
+Epoch 59, global step 21120: 'val/accuracy' was not in top 1
+Epoch 60, global step 21472: 'val/accuracy' was not in top 1
+Epoch 61, global step 21824: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.678
+Epoch 62, global step 22176: 'val/accuracy' reached 0.67840 (best 0.67840), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 63, global step 22528: 'val/accuracy' was not in top 1
+Epoch 64, global step 22880: 'val/accuracy' was not in top 1
+Epoch 65, global step 23232: 'val/accuracy' was not in top 1
+Epoch 66, global step 23584: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.680
+Epoch 67, global step 23936: 'val/accuracy' reached 0.67960 (best 0.67960), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 68, global step 24288: 'val/accuracy' was not in top 1
+Epoch 69, global step 24640: 'val/accuracy' was not in top 1
+Epoch 70, global step 24992: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.006 >= min_delta = 0.0. New best score: 0.686
+Epoch 71, global step 25344: 'val/accuracy' reached 0.68600 (best 0.68600), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 72, global step 25696: 'val/accuracy' was not in top 1
+Epoch 73, global step 26048: 'val/accuracy' was not in top 1
+Epoch 74, global step 26400: 'val/accuracy' was not in top 1
+Epoch 75, global step 26752: 'val/accuracy' was not in top 1
+Epoch 76, global step 27104: 'val/accuracy' was not in top 1
+Epoch 77, global step 27456: 'val/accuracy' was not in top 1
+Epoch 78, global step 27808: 'val/accuracy' was not in top 1
+Epoch 79, global step 28160: 'val/accuracy' was not in top 1
+Epoch 80, global step 28512: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.688
+Epoch 81, global step 28864: 'val/accuracy' reached 0.68760 (best 0.68760), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.693
+Epoch 82, global step 29216: 'val/accuracy' reached 0.69300 (best 0.69300), saving model to '/workspace/kd_thesis/checkpoints/baseline/Baseline-MobileNetV2/gc7agbej/best.ckpt' as top 1
+Epoch 83, global step 29568: 'val/accuracy' was not in top 1
+Epoch 84, global step 29920: 'val/accuracy' was not in top 1
+Epoch 85, global step 30272: 'val/accuracy' was not in top 1
+Epoch 86, global step 30624: 'val/accuracy' was not in top 1
+Epoch 87, global step 30976: 'val/accuracy' was not in top 1
+Epoch 88, global step 31328: 'val/accuracy' was not in top 1
+Epoch 89, global step 31680: 'val/accuracy' was not in top 1
+Epoch 90, global step 32032: 'val/accuracy' was not in top 1
+Epoch 91, global step 32384: 'val/accuracy' was not in top 1
+Epoch 92, global step 32736: 'val/accuracy' was not in top 1
+Epoch 93, global step 33088: 'val/accuracy' was not in top 1
+Epoch 94, global step 33440: 'val/accuracy' was not in top 1
+Epoch 95, global step 33792: 'val/accuracy' was not in top 1
+Epoch 96, global step 34144: 'val/accuracy' was not in top 1
+Monitored metric val/accuracy did not improve in the last 15 records. Best score: 0.693. Signaling Trainer to stop.
+Epoch 97, global step 34496: 'val/accuracy' was not in top 1
+2025-10-28 22:26:52 - KnowledgeDistillation - INFO - Training completed successfully!

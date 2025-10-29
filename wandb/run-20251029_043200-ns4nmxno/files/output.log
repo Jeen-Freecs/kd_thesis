@@ -1,0 +1,181 @@
+2025-10-29 04:32:01 - KnowledgeDistillation - INFO - Checkpoints will be saved to: checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno
+2025-10-29 04:32:01 - KnowledgeDistillation - INFO - WandB Run ID: ns4nmxno
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+2025-10-29 04:32:01 - KnowledgeDistillation - INFO - Starting training...
+You are using a CUDA device ('NVIDIA GeForce RTX 4090') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+Files already downloaded and verified
+Files already downloaded and verified
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/venv/kd-env/lib/python3.11/site-packages/pytorch_lightning/utilities/model_summary/model_summary.py:231: Precision 16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
+
+  | Name        | Type            | Params | Mode
+--------------------------------------------------------
+0 | student     | EfficientNet    | 2.4 M  | train
+1 | kl_div_loss | KLDivLoss       | 0      | train
+2 | val_auroc   | MulticlassAUROC | 0      | train
+3 | test_auroc  | MulticlassAUROC | 0      | train
+--------------------------------------------------------
+2.4 M     Trainable params
+0         Non-trainable params
+2.4 M     Total params
+9.408     Total estimated model params size (MB)
+292       Modules in train mode
+0         Modules in eval mode
+Epoch 14: 100%|██████████| 352/352 [00:53<00:00,  6.55it/s, v_num=mxno, train/loss_soft_step=1.800, train/loss_hard_step=0.000, train/gate_step=1.000, train/loss_total_step=1.800, train/avg_teacher_conf_step=0.998, train/loss_soft=2.410, train/loss_hard=0.000, train/gate=1.000, train/loss_total=2.410, train/avg_teacher_conf=0.998, val/auroc=0.981, val/accuracy=0.631, val/loss_total=2.410, train/loss_soft_epoch=1.990, train/loss_hard_epoch=0.000, train/gate_epoch=1.000, train/loss_total_epoch=1.990, train/avg_teacher_conf_epoch=0.998]
+/venv/kd-env/lib/python3.11/site-packages/torchmetrics/utilities/prints.py:43: UserWarning: No positive samples in targets, true positive value should be meaningless. Returning zero tensor in true positive score
+  warnings.warn(*args, **kwargs)
+                                                                        
+Metric val/accuracy improved. New best score: 0.191
+Epoch 0, global step 352: 'val/accuracy' reached 0.19060 (best 0.19060), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.087 >= min_delta = 0.0. New best score: 0.278
+Epoch 1, global step 704: 'val/accuracy' reached 0.27760 (best 0.27760), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.102 >= min_delta = 0.0. New best score: 0.380
+Epoch 2, global step 1056: 'val/accuracy' reached 0.38000 (best 0.38000), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.050 >= min_delta = 0.0. New best score: 0.430
+Epoch 3, global step 1408: 'val/accuracy' reached 0.42980 (best 0.42980), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.035 >= min_delta = 0.0. New best score: 0.464
+Epoch 4, global step 1760: 'val/accuracy' reached 0.46440 (best 0.46440), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.024 >= min_delta = 0.0. New best score: 0.488
+Epoch 5, global step 2112: 'val/accuracy' reached 0.48820 (best 0.48820), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.038 >= min_delta = 0.0. New best score: 0.526
+Epoch 6, global step 2464: 'val/accuracy' reached 0.52640 (best 0.52640), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.035 >= min_delta = 0.0. New best score: 0.561
+Epoch 7, global step 2816: 'val/accuracy' reached 0.56100 (best 0.56100), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.566
+Epoch 8, global step 3168: 'val/accuracy' reached 0.56620 (best 0.56620), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.015 >= min_delta = 0.0. New best score: 0.582
+Epoch 9, global step 3520: 'val/accuracy' reached 0.58160 (best 0.58160), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.019 >= min_delta = 0.0. New best score: 0.601
+Epoch 10, global step 3872: 'val/accuracy' reached 0.60100 (best 0.60100), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.013 >= min_delta = 0.0. New best score: 0.614
+Epoch 11, global step 4224: 'val/accuracy' reached 0.61440 (best 0.61440), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.011 >= min_delta = 0.0. New best score: 0.626
+Epoch 12, global step 4576: 'val/accuracy' reached 0.62580 (best 0.62580), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.631
+Epoch 13, global step 4928: 'val/accuracy' reached 0.63120 (best 0.63120), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 14, global step 5280: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.007 >= min_delta = 0.0. New best score: 0.638
+Epoch 15, global step 5632: 'val/accuracy' reached 0.63840 (best 0.63840), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.643
+Epoch 16, global step 5984: 'val/accuracy' reached 0.64300 (best 0.64300), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.010 >= min_delta = 0.0. New best score: 0.653
+Epoch 17, global step 6336: 'val/accuracy' reached 0.65340 (best 0.65340), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.659
+Epoch 18, global step 6688: 'val/accuracy' reached 0.65860 (best 0.65860), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.009 >= min_delta = 0.0. New best score: 0.668
+Epoch 19, global step 7040: 'val/accuracy' reached 0.66800 (best 0.66800), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.003 >= min_delta = 0.0. New best score: 0.671
+Epoch 20, global step 7392: 'val/accuracy' reached 0.67140 (best 0.67140), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.673
+Epoch 21, global step 7744: 'val/accuracy' reached 0.67340 (best 0.67340), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.003 >= min_delta = 0.0. New best score: 0.676
+Epoch 22, global step 8096: 'val/accuracy' reached 0.67640 (best 0.67640), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.680
+Epoch 23, global step 8448: 'val/accuracy' reached 0.68020 (best 0.68020), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 24, global step 8800: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.684
+Epoch 25, global step 9152: 'val/accuracy' reached 0.68400 (best 0.68400), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.008 >= min_delta = 0.0. New best score: 0.692
+Epoch 26, global step 9504: 'val/accuracy' reached 0.69180 (best 0.69180), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.000 >= min_delta = 0.0. New best score: 0.692
+Epoch 27, global step 9856: 'val/accuracy' reached 0.69220 (best 0.69220), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 28, global step 10208: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.697
+Epoch 29, global step 10560: 'val/accuracy' reached 0.69740 (best 0.69740), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 30, global step 10912: 'val/accuracy' was not in top 1
+Epoch 31, global step 11264: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.698
+Epoch 32, global step 11616: 'val/accuracy' reached 0.69800 (best 0.69800), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 33, global step 11968: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.005 >= min_delta = 0.0. New best score: 0.703
+Epoch 34, global step 12320: 'val/accuracy' reached 0.70320 (best 0.70320), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.704
+Epoch 35, global step 12672: 'val/accuracy' reached 0.70440 (best 0.70440), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 36, global step 13024: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.003 >= min_delta = 0.0. New best score: 0.708
+Epoch 37, global step 13376: 'val/accuracy' reached 0.70760 (best 0.70760), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 38, global step 13728: 'val/accuracy' was not in top 1
+Epoch 39, global step 14080: 'val/accuracy' was not in top 1
+Epoch 40, global step 14432: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.712
+Epoch 41, global step 14784: 'val/accuracy' reached 0.71200 (best 0.71200), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 42, global step 15136: 'val/accuracy' was not in top 1
+Epoch 43, global step 15488: 'val/accuracy' was not in top 1
+Epoch 44, global step 15840: 'val/accuracy' was not in top 1
+Epoch 45, global step 16192: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.714
+Epoch 46, global step 16544: 'val/accuracy' reached 0.71360 (best 0.71360), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 47, global step 16896: 'val/accuracy' was not in top 1
+Epoch 48, global step 17248: 'val/accuracy' was not in top 1
+Epoch 49, global step 17600: 'val/accuracy' was not in top 1
+Epoch 50, global step 17952: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.006 >= min_delta = 0.0. New best score: 0.719
+Epoch 51, global step 18304: 'val/accuracy' reached 0.71920 (best 0.71920), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 52, global step 18656: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.001 >= min_delta = 0.0. New best score: 0.720
+Epoch 53, global step 19008: 'val/accuracy' reached 0.71980 (best 0.71980), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 54, global step 19360: 'val/accuracy' was not in top 1
+Epoch 55, global step 19712: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.722
+Epoch 56, global step 20064: 'val/accuracy' reached 0.72200 (best 0.72200), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 57, global step 20416: 'val/accuracy' was not in top 1
+Epoch 58, global step 20768: 'val/accuracy' was not in top 1
+Epoch 59, global step 21120: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.002 >= min_delta = 0.0. New best score: 0.724
+Epoch 60, global step 21472: 'val/accuracy' reached 0.72440 (best 0.72440), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 61, global step 21824: 'val/accuracy' was not in top 1
+Epoch 62, global step 22176: 'val/accuracy' was not in top 1
+Epoch 63, global step 22528: 'val/accuracy' was not in top 1
+Epoch 64, global step 22880: 'val/accuracy' was not in top 1
+Epoch 65, global step 23232: 'val/accuracy' was not in top 1
+Epoch 66, global step 23584: 'val/accuracy' was not in top 1
+Epoch 67, global step 23936: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.728
+Epoch 68, global step 24288: 'val/accuracy' reached 0.72800 (best 0.72800), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 69, global step 24640: 'val/accuracy' was not in top 1
+Epoch 70, global step 24992: 'val/accuracy' was not in top 1
+Epoch 71, global step 25344: 'val/accuracy' was not in top 1
+Epoch 72, global step 25696: 'val/accuracy' was not in top 1
+Epoch 73, global step 26048: 'val/accuracy' was not in top 1
+Epoch 74, global step 26400: 'val/accuracy' was not in top 1
+Epoch 75, global step 26752: 'val/accuracy' was not in top 1
+Epoch 76, global step 27104: 'val/accuracy' was not in top 1
+Epoch 77, global step 27456: 'val/accuracy' was not in top 1
+Epoch 78, global step 27808: 'val/accuracy' was not in top 1
+Metric val/accuracy improved by 0.004 >= min_delta = 0.0. New best score: 0.732
+Epoch 79, global step 28160: 'val/accuracy' reached 0.73180 (best 0.73180), saving model to '/workspace/kd_thesis/checkpoints/dynamic/Method2-Dynamic-3xResNet-gamma5/ns4nmxno/best.ckpt' as top 1
+Epoch 80, global step 28512: 'val/accuracy' was not in top 1
+Epoch 81, global step 28864: 'val/accuracy' was not in top 1
+Epoch 82, global step 29216: 'val/accuracy' was not in top 1
+Epoch 83, global step 29568: 'val/accuracy' was not in top 1
+Epoch 84, global step 29920: 'val/accuracy' was not in top 1
+Epoch 85, global step 30272: 'val/accuracy' was not in top 1
+Epoch 86, global step 30624: 'val/accuracy' was not in top 1
+Epoch 87, global step 30976: 'val/accuracy' was not in top 1
+Epoch 88, global step 31328: 'val/accuracy' was not in top 1
+Epoch 89, global step 31680: 'val/accuracy' was not in top 1
+Epoch 90, global step 32032: 'val/accuracy' was not in top 1
+Epoch 91, global step 32384: 'val/accuracy' was not in top 1
+Epoch 92, global step 32736: 'val/accuracy' was not in top 1
+Epoch 93, global step 33088: 'val/accuracy' was not in top 1
+Epoch 94, global step 33440: 'val/accuracy' was not in top 1
+Epoch 95, global step 33792: 'val/accuracy' was not in top 1
+Epoch 96, global step 34144: 'val/accuracy' was not in top 1
+Epoch 97, global step 34496: 'val/accuracy' was not in top 1
+Epoch 98, global step 34848: 'val/accuracy' was not in top 1
+Epoch 99, global step 35200: 'val/accuracy' was not in top 1
+Epoch 100, global step 35552: 'val/accuracy' was not in top 1
+Epoch 101, global step 35904: 'val/accuracy' was not in top 1
+Epoch 102, global step 36256: 'val/accuracy' was not in top 1
+Epoch 103, global step 36608: 'val/accuracy' was not in top 1
+Epoch 104, global step 36960: 'val/accuracy' was not in top 1
+Epoch 105, global step 37312: 'val/accuracy' was not in top 1
+Epoch 106, global step 37664: 'val/accuracy' was not in top 1
+Epoch 107, global step 38016: 'val/accuracy' was not in top 1
+Epoch 108, global step 38368: 'val/accuracy' was not in top 1
+Monitored metric val/accuracy did not improve in the last 30 records. Best score: 0.732. Signaling Trainer to stop.
+Epoch 109, global step 38720: 'val/accuracy' was not in top 1
+2025-10-29 06:12:55 - KnowledgeDistillation - INFO - Training completed successfully!
