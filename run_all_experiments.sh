@@ -36,7 +36,7 @@ echo "" | tee -a "${RESULTS_FILE}"
 ###############################################################################
 
 CONFIGS=(
-    "configs/method3_diverse_ensemble.yaml"
+    "configs/baseline_config.yaml"
     "configs/single_teacher_densenet.yaml"
     "configs/single_teacher_resnet50.yaml"
     "configs/single_teacher_vit.yaml"
@@ -143,17 +143,22 @@ for config in "${CONFIGS[@]}"; do
         print_info "Starting evaluation..."
         echo "Evaluation started at: $(date)" | tee -a "${RESULTS_FILE}"
         
-        # Find the best checkpoint
-        BEST_CHECKPOINT=$(find "${CHECKPOINT_DIR}" -name "best-*.ckpt" 2>/dev/null | head -1)
+        # Find the best checkpoint (saved as "best.ckpt" by ModelCheckpoint)
+        BEST_CHECKPOINT="${CHECKPOINT_DIR}/best.ckpt"
         
-        if [ -z "${BEST_CHECKPOINT}" ]; then
-            print_error "Best checkpoint not found in ${CHECKPOINT_DIR}"
-            echo "ERROR: Best checkpoint not found" | tee -a "${RESULTS_FILE}"
+        if [ -f "${BEST_CHECKPOINT}" ]; then
+            echo "" | tee -a "${RESULTS_FILE}"
+            echo "📦 CHECKPOINT BEING EVALUATED:" | tee -a "${RESULTS_FILE}"
+            echo "   Path: ${BEST_CHECKPOINT}" | tee -a "${RESULTS_FILE}"
+            echo "   Size: $(du -h "${BEST_CHECKPOINT}" | cut -f1)" | tee -a "${RESULTS_FILE}"
+            echo "   Modified: $(stat -c %y "${BEST_CHECKPOINT}" 2>/dev/null || stat -f %Sm "${BEST_CHECKPOINT}" 2>/dev/null)" | tee -a "${RESULTS_FILE}"
+            echo "" | tee -a "${RESULTS_FILE}"
             
-            # Try to evaluate from WandB
-            print_info "Attempting to download from WandB..."
-            if python scripts/evaluate.py --wandb-run-id "${RUN_ID}" --config "${config}" --split test 2>&1 | tee "${EVAL_LOG}"; then
-                print_success "Evaluation completed (from WandB)"
+            print_info "Using local checkpoint: ${BEST_CHECKPOINT}"
+            
+            # Evaluate on test set
+            if python scripts/evaluate.py --checkpoint "${BEST_CHECKPOINT}" --config "${config}" --split test 2>&1 | tee "${EVAL_LOG}"; then
+                print_success "Evaluation completed successfully"
                 echo "Evaluation completed at: $(date)" | tee -a "${RESULTS_FILE}"
                 
                 # Extract and save results
@@ -165,11 +170,18 @@ for config in "${CONFIGS[@]}"; do
                 FAILED=$((FAILED + 1))
             fi
         else
-            print_info "Using checkpoint: ${BEST_CHECKPOINT}"
+            print_error "Best checkpoint not found at ${BEST_CHECKPOINT}"
+            echo "ERROR: Best checkpoint not found at ${BEST_CHECKPOINT}" | tee -a "${RESULTS_FILE}"
             
-            # Evaluate on test set
-            if python scripts/evaluate.py --checkpoint "${BEST_CHECKPOINT}" --config "${config}" --split test 2>&1 | tee "${EVAL_LOG}"; then
-                print_success "Evaluation completed successfully"
+            # Try to evaluate from WandB
+            print_info "Attempting to download from WandB artifact..."
+            echo "" | tee -a "${RESULTS_FILE}"
+            echo "📦 CHECKPOINT BEING EVALUATED:" | tee -a "${RESULTS_FILE}"
+            echo "   Source: WandB artifact (model-${RUN_ID}:best)" | tee -a "${RESULTS_FILE}"
+            echo "" | tee -a "${RESULTS_FILE}"
+            
+            if python scripts/evaluate.py --wandb-run-id "${RUN_ID}" --config "${config}" --split test 2>&1 | tee "${EVAL_LOG}"; then
+                print_success "Evaluation completed (from WandB)"
                 echo "Evaluation completed at: $(date)" | tee -a "${RESULTS_FILE}"
                 
                 # Extract and save results

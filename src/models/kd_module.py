@@ -111,6 +111,8 @@ class CAWeightedKDLitModule(pl.LightningModule):
         Formula from paper (Eq. 1):
         w_k = (1/(K-1)) * [1 - exp(L_CE^k) / sum_j exp(L_CE^j)]
         
+        Special case: For single teacher (K=1), returns weight of 1.0
+        
         Args:
             teacher_logits: List of logits from each teacher
             labels: Ground truth labels
@@ -119,6 +121,11 @@ class CAWeightedKDLitModule(pl.LightningModule):
             Weights for each teacher, shape (batch_size, num_teachers)
         """
         K = len(teacher_logits)
+        batch_size = teacher_logits[0].shape[0]
+        
+        # Special case: single teacher - just return weight of 1.0
+        if K == 1:
+            return torch.ones((batch_size, 1), device=teacher_logits[0].device)
         
         # Compute CE loss for each teacher (per-sample)
         ce_losses = []
@@ -365,6 +372,8 @@ class DynamicKDLitModule(pl.LightningModule):
         Uses exponential-based weighting scheme (Eq. 1):
         w_k = (1/(K-1)) * [1 - exp(L_CE^k) / sum_j exp(L_CE^j)]
         
+        Special case: For single teacher (K=1), returns weight of 1.0
+        
         Args:
             teacher_logits: List of logits from each teacher
             labels: Ground truth labels
@@ -373,6 +382,11 @@ class DynamicKDLitModule(pl.LightningModule):
             Weights for each teacher, shape (batch_size, num_teachers)
         """
         K = len(teacher_logits)
+        batch_size = teacher_logits[0].shape[0]
+        
+        # Special case: single teacher - just return weight of 1.0
+        if K == 1:
+            return torch.ones((batch_size, 1), device=teacher_logits[0].device)
         
         # Compute CE loss for each teacher (per-sample)
         ce_losses = []

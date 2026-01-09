@@ -222,17 +222,34 @@ def main():
             model_config = config.get('model', {})
             kd_config = config.get('kd', {})
             
+            # Create descriptive evaluation name
+            # Use experiment name from config if available, otherwise construct from method
+            experiment_name = wandb_config.get('name', None)
+            if not experiment_name:
+                # Fallback: construct name from KD method and teachers
+                kd_type = kd_config.get('type', 'baseline')
+                if kd_type == 'baseline':
+                    experiment_name = 'Baseline'
+                else:
+                    teachers = model_config.get('teacher_names', [])
+                    teacher_str = '-'.join([t.split('_')[0].capitalize() for t in teachers[:3]])  # e.g., "ResNet-DenseNet-ViT"
+                    experiment_name = f"{kd_type.capitalize()}-{teacher_str}"
+            
+            # Create evaluation run name: eval-{split}-{experiment_name}-{run_id}
+            eval_name = f"eval-{args.split}-{experiment_name}-{run_id_for_name}"
+            
             eval_run = wandb.init(
                 project=wandb_config.get('project', 'Knowledge-Distillation-CIFAR100'),
-                name=f"eval-{args.split}-{run_id_for_name}",
+                name=eval_name,
                 job_type="evaluation",
-                tags=[args.split, "evaluation", run_id_for_name, kd_config.get('type', 'baseline')],
+                tags=[args.split, "evaluation", run_id_for_name, kd_config.get('type', 'baseline'), experiment_name],
                 config={
                     "config_file": args.config,
                     "checkpoint": checkpoint_path,
                     "split": args.split,
                     "device": args.device,
                     "run_id": run_id_for_name,
+                    "experiment_name": experiment_name,
                     # Add model metadata for filtering/comparison
                     "student_model": model_config.get('student_name', 'unknown'),
                     "teacher_models": model_config.get('teacher_names', []),
@@ -276,14 +293,30 @@ def main():
     logger.info(f"  Accuracy: {results['accuracy']*100:.2f}%")
     logger.info(f"  Correct: {results['correct']}/{results['total']}")
     
-    print("\n" + "="*50)
+    # Get experiment name for display
+    wandb_config = config.get('wandb', {})
+    experiment_name = wandb_config.get('name', 'Unknown Experiment')
+    kd_config = config.get('kd', {})
+    model_config = config.get('model', {})
+    
+    print("\n" + "="*70)
     print("EVALUATION RESULTS")
-    print("="*50)
-    print(f"Split: {args.split}")
-    print(f"Loss: {results['loss']:.4f}")
-    print(f"Accuracy: {results['accuracy']*100:.2f}%")
-    print(f"Correct: {results['correct']}/{results['total']}")
-    print("="*50 + "\n")
+    print("="*70)
+    print(f"")
+    print(f"📋 EXPERIMENT INFO:")
+    print(f"   Name:        {experiment_name}")
+    print(f"   KD Method:   {kd_config.get('type', 'baseline')}")
+    print(f"   Teachers:    {', '.join(model_config.get('teacher_names', ['None']))}")
+    print(f"   Config:      {args.config}")
+    print(f"")
+    print(f"📦 CHECKPOINT USED:")
+    print(f"   Path: {checkpoint_path}")
+    print(f"")
+    print(f"📊 RESULTS ({args.split} set):")
+    print(f"   Loss:     {results['loss']:.4f}")
+    print(f"   Accuracy: {results['accuracy']*100:.2f}%")
+    print(f"   Correct:  {results['correct']}/{results['total']}")
+    print("="*70 + "\n")
 
 
 if __name__ == '__main__':
