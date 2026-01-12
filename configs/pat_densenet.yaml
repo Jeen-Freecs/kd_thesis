@@ -1,0 +1,51 @@
+# PAT: Perspective-Aware Teaching with DenseNet-121 Teacher
+# Reference: Lin et al. "Perspective-Aware Teaching: Adapting Knowledge for 
+#            Heterogeneous Distillation" arXiv:2501.08885
+# https://github.com/jimmylin0979/PAT
+
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 128
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+  pre_trained: false
+  teacher_model_types: ["densenet"]
+  student_model_type: "mobilenet"
+
+# Model configuration
+model:
+  num_classes: 100
+  student_name: "mobilenetv2_100"
+  student_pretrained: false
+  teacher_names:
+    - "densenet121_cifar100"
+
+# Knowledge Distillation configuration
+kd:
+  type: "pat"  # Perspective-Aware Teaching
+  temperature: 4.0
+  learning_rate: 0.001
+  num_classes: 100
+  # PAT-specific parameters
+  alpha: 1.0                  # Weight for L_KL (logit distillation)
+  beta: 1.0                   # Weight for L_FD (feature distillation)
+  gamma: 0.1                  # Weight for L_Reg (regularization)
+  student_channels: [24, 32, 64, 1280]  # MobileNetV2 stage channels
+  teacher_feature_dim: 342    # DenseNet-121 CIFAR feature dimension
+  embed_dim: 256              # RAA embedding dimension
+  num_heads: 8                # RAA attention heads
+
+# Training configuration
+training:
+  max_epochs: 150
+  patience: 30
+  log_every_n_steps: 50
+
+# Weights & Biases configuration
+wandb:
+  project: "KD-CIFAR100"
+  name: "PAT-DenseNet121"
+  log_model: "all"
+  resume: "allow"

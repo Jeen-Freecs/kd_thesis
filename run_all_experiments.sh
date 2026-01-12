@@ -36,10 +36,19 @@ echo "" | tee -a "${RESULTS_FILE}"
 ###############################################################################
 
 CONFIGS=(
-    "configs/baseline_config.yaml"
-    "configs/single_teacher_densenet.yaml"
-    "configs/single_teacher_resnet50.yaml"
-    "configs/single_teacher_vit.yaml"
+    # Baseline (no KD)
+    # "configs/baseline_config.yaml"
+    
+    # # Single-teacher Dynamic KD (Method 2)
+    # "configs/single_teacher_densenet.yaml"
+    # "configs/single_teacher_resnet50.yaml"
+    # "configs/single_teacher_vit.yaml"
+    
+    # PAT: Perspective-Aware Teaching (arXiv:2501.08885)
+    # For heterogeneous architectures (CNN ↔ ViT)
+    "configs/pat_densenet.yaml"
+    "configs/pat_resnet50.yaml"
+    "configs/pat_vit.yaml"
 )
 
 ###############################################################################

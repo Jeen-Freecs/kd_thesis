@@ -866,6 +866,643 @@ class ConfidenceBasedKDLitModule(pl.LightningModule):
         return self.shared_eval_step(batch, 'test')
 
 
+class RegionAwareAttention(nn.Module):
+    """
+    Region-Aware Attention (RAA) Module from PAT Framework.
+    
+    Solves the VIEW MISMATCH problem between CNN students and ViT teachers.
+    Transforms local CNN features into global representations using cross-stage attention.
+    
+    Reference: Lin et al. "Perspective-Aware Teaching: Adapting Knowledge for 
+    Heterogeneous Distillation" arXiv:2501.08885
+    https://github.com/jimmylin0979/PAT
+    """
+    
+    def __init__(
+        self,
+        student_channels: List[int],  # Channels at each stage [96, 192, 384, 768] for example
+        embed_dim: int = 256,
+        num_heads: int = 8,
+        patch_size: int = 2,
+        dropout: float = 0.1
+    ):
+        """
+        Initialize RAA module.
+        
+        Args:
+            student_channels: List of channel dimensions at each CNN stage
+            embed_dim: Dimension of the aligned embedding space
+            num_heads: Number of attention heads
+            patch_size: Size of patches to extract from feature maps
+            dropout: Dropout rate
+        """
+        super().__init__()
+        
+        self.num_stages = len(student_channels)
+        self.embed_dim = embed_dim
+        self.patch_size = patch_size
+        
+        # Projection layers for each stage (project to shared embed_dim)
+        self.stage_projectors = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(ch, embed_dim, kernel_size=1),
+                nn.BatchNorm2d(embed_dim),
+                nn.ReLU(inplace=True)
+            )
+            for ch in student_channels
+        ])
+        
+        # Cross-stage self-attention
+        self.cross_stage_attention = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True
+        )
+        
+        # Layer norm for attention
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        
+        # FFN after attention
+        self.ffn = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim * 4),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(embed_dim * 4, embed_dim),
+            nn.Dropout(dropout)
+        )
+        
+        # Learnable stage embeddings
+        self.stage_embeddings = nn.Parameter(torch.randn(1, self.num_stages, embed_dim) * 0.02)
+    
+    def patchify(self, feature_map: torch.Tensor) -> torch.Tensor:
+        """
+        Convert feature map to patches (like ViT tokens).
+        
+        Args:
+            feature_map: (B, C, H, W)
+            
+        Returns:
+            patches: (B, num_patches, C)
+        """
+        B, C, H, W = feature_map.shape
+        
+        # Use adaptive pooling to get consistent number of patches
+        target_size = max(H // self.patch_size, 1)
+        pooled = F.adaptive_avg_pool2d(feature_map, (target_size, target_size))
+        
+        # Flatten spatial dimensions
+        patches = pooled.flatten(2).transpose(1, 2)  # (B, num_patches, C)
+        
+        return patches
+    
+    def forward(self, stage_features: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Forward pass through RAA.
+        
+        Args:
+            stage_features: List of feature maps from each CNN stage
+                           [(B, C1, H1, W1), (B, C2, H2, W2), ...]
+                           
+        Returns:
+            aligned_features: (B, embed_dim) - Global representation
+        """
+        B = stage_features[0].shape[0]
+        
+        all_patches = []
+        
+        # Process each stage
+        for i, (feat, projector) in enumerate(zip(stage_features, self.stage_projectors)):
+            # Project to shared dimension
+            projected = projector(feat)  # (B, embed_dim, H, W)
+            
+            # Patchify
+            patches = self.patchify(projected)  # (B, num_patches, embed_dim)
+            
+            # Add stage embedding
+            patches = patches + self.stage_embeddings[:, i:i+1, :]
+            
+            all_patches.append(patches)
+        
+        # Concatenate all patches from all stages
+        all_patches = torch.cat(all_patches, dim=1)  # (B, total_patches, embed_dim)
+        
+        # Apply cross-stage self-attention
+        normed = self.norm1(all_patches)
+        attended, _ = self.cross_stage_attention(normed, normed, normed)
+        all_patches = all_patches + attended
+        
+        # FFN
+        all_patches = all_patches + self.ffn(self.norm2(all_patches))
+        
+        # Global pooling to get final representation
+        aligned_features = all_patches.mean(dim=1)  # (B, embed_dim)
+        
+        return aligned_features
+
+
+class AdaptiveFeedbackPrompt(nn.Module):
+    """
+    Adaptive Feedback Prompt (AFP) Module from PAT Framework.
+    
+    Solves the TEACHER UNAWARENESS problem by making the teacher adapt
+    to the student's learning progress using prompt tuning.
+    
+    Reference: Lin et al. "Perspective-Aware Teaching: Adapting Knowledge for 
+    Heterogeneous Distillation" arXiv:2501.08885
+    """
+    
+    def __init__(
+        self,
+        teacher_dim: int,
+        prompt_dim: int = 64,
+        num_prompts: int = 4
+    ):
+        """
+        Initialize AFP module.
+        
+        Args:
+            teacher_dim: Dimension of teacher features
+            prompt_dim: Dimension of prompt embeddings
+            num_prompts: Number of prompt tokens
+        """
+        super().__init__()
+        
+        self.teacher_dim = teacher_dim
+        self.prompt_dim = prompt_dim
+        self.num_prompts = num_prompts
+        
+        # Learnable prompt embeddings
+        self.prompts = nn.Parameter(torch.randn(1, num_prompts, prompt_dim) * 0.02)
+        
+        # Feedback encoder: encodes the error signal (T - S)
+        self.feedback_encoder = nn.Sequential(
+            nn.Linear(teacher_dim, prompt_dim * 2),
+            nn.ReLU(inplace=True),
+            nn.Linear(prompt_dim * 2, prompt_dim)
+        )
+        
+        # Prompt-to-feature projection
+        self.prompt_projector = nn.Sequential(
+            nn.Linear(prompt_dim, teacher_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(teacher_dim, teacher_dim)
+        )
+        
+        # Gating mechanism to control adaptation strength
+        self.gate = nn.Sequential(
+            nn.Linear(teacher_dim + prompt_dim, 1),
+            nn.Sigmoid()
+        )
+    
+    def forward(
+        self,
+        teacher_features: torch.Tensor,
+        student_features: torch.Tensor,
+        frozen_teacher_features: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Adapt teacher features based on student feedback.
+        
+        Args:
+            teacher_features: Current teacher features (B, D)
+            student_features: Current student features (B, D_s) - may need projection
+            frozen_teacher_features: Original frozen teacher features for regularization
+            
+        Returns:
+            adapted_features: Teacher features adapted to student's needs (B, D)
+        """
+        B = teacher_features.shape[0]
+        
+        # Compute feedback (error residue)
+        # Need to handle dimension mismatch between teacher and student
+        if student_features.shape[-1] != teacher_features.shape[-1]:
+            # Project student to teacher dimension for comparison
+            feedback = teacher_features  # Use teacher as base
+        else:
+            feedback = teacher_features - student_features
+        
+        # Encode feedback
+        feedback_encoded = self.feedback_encoder(feedback)  # (B, prompt_dim)
+        
+        # Combine with learnable prompts
+        prompts_expanded = self.prompts.expand(B, -1, -1)  # (B, num_prompts, prompt_dim)
+        
+        # Add feedback to prompts
+        feedback_expanded = feedback_encoded.unsqueeze(1)  # (B, 1, prompt_dim)
+        modulated_prompts = prompts_expanded + feedback_expanded  # (B, num_prompts, prompt_dim)
+        
+        # Pool prompts
+        prompt_pooled = modulated_prompts.mean(dim=1)  # (B, prompt_dim)
+        
+        # Project to teacher feature space
+        adaptation = self.prompt_projector(prompt_pooled)  # (B, teacher_dim)
+        
+        # Compute gating weight
+        gate_input = torch.cat([teacher_features, prompt_pooled], dim=-1)
+        gate_weight = self.gate(gate_input)  # (B, 1)
+        
+        # Apply gated adaptation
+        adapted_features = teacher_features + gate_weight * adaptation
+        
+        return adapted_features
+
+
+class PATKDLitModule(pl.LightningModule):
+    """
+    PAT: Perspective-Aware Teaching Knowledge Distillation Framework.
+    
+    A universal KD framework for heterogeneous architectures (CNN ↔ ViT).
+    
+    Key Components:
+    1. RAA (Region-Aware Attention): Solves VIEW MISMATCH by transforming
+       student's local features into global representation via cross-stage attention.
+    
+    2. AFP (Adaptive Feedback Prompts): Solves TEACHER UNAWARENESS by making
+       teacher adapt to student's learning progress using prompt tuning.
+    
+    Loss Function:
+    L_PAT = L_CE + α·L_KL + β·L_FD + γ·L_Reg
+    
+    Reference: Lin et al. "Perspective-Aware Teaching: Adapting Knowledge for 
+    Heterogeneous Distillation" arXiv:2501.08885
+    https://github.com/jimmylin0979/PAT
+    """
+    
+    def __init__(
+        self,
+        teacher_models: List[nn.Module],
+        student_model: nn.Module,
+        temperature: float = 4.0,
+        learning_rate: float = 1e-3,
+        alpha: float = 1.0,       # Weight for L_KL (logit distillation)
+        beta: float = 1.0,        # Weight for L_FD (feature distillation)
+        gamma: float = 0.1,       # Weight for L_Reg (regularization)
+        num_classes: int = 100,
+        student_channels: List[int] = None,  # [24, 32, 64, 1280] for MobileNetV2
+        teacher_feature_dim: int = 768,      # 768 for ViT, 2048 for ResNet
+        embed_dim: int = 256,
+        num_heads: int = 8,
+    ):
+        """
+        Initialize PAT-KD Module.
+        
+        Args:
+            teacher_models: List of pre-trained teacher models (single teacher)
+            student_model: Student model to be trained
+            temperature: Temperature for softening probabilities
+            learning_rate: Learning rate for optimizer
+            alpha: Weight for KL divergence loss
+            beta: Weight for feature distillation loss
+            gamma: Weight for regularization loss
+            num_classes: Number of output classes
+            student_channels: Channel dims at each student stage
+            teacher_feature_dim: Teacher's feature dimension
+            embed_dim: Embedding dimension for RAA
+            num_heads: Number of attention heads in RAA
+        """
+        super().__init__()
+        
+        self.save_hyperparameters(ignore=["teacher_models", "student_model"])
+        
+        self.temperature = temperature
+        self.learning_rate = learning_rate
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.num_classes = num_classes
+        self.embed_dim = embed_dim
+        self.teacher_feature_dim = teacher_feature_dim
+        
+        # Default student channels for MobileNetV2
+        if student_channels is None:
+            student_channels = [24, 32, 64, 1280]
+        self.student_channels = student_channels
+        
+        # Student model
+        if student_model is None:
+            raise ValueError("A student model must be provided.")
+        self.student = student_model
+        
+        # Teacher model (frozen for main forward, but AFP adapts it)
+        if not teacher_models or len(teacher_models) == 0:
+            raise ValueError("Teacher model must be provided for PAT.")
+        self.teacher = teacher_models[0]
+        self.teacher.eval()
+        for param in self.teacher.parameters():
+            param.requires_grad = False
+        
+        # Channel adapters to convert student final features to expected stage channels
+        # MobileNetV2 final feature dim is 1280, we need to adapt to [24, 32, 64, 1280]
+        self.student_final_dim = 1280  # MobileNetV2 default
+        self.channel_adapters = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(self.student_final_dim, ch, kernel_size=1),
+                nn.BatchNorm2d(ch),
+                nn.ReLU(inplace=True)
+            ) if ch != self.student_final_dim else nn.Identity()
+            for ch in student_channels
+        ])
+        
+        # RAA: Region-Aware Attention for student
+        self.raa = RegionAwareAttention(
+            student_channels=student_channels,
+            embed_dim=embed_dim,
+            num_heads=num_heads
+        )
+        
+        # AFP: Adaptive Feedback Prompts for teacher
+        self.afp = AdaptiveFeedbackPrompt(
+            teacher_dim=teacher_feature_dim,
+            prompt_dim=embed_dim // 2
+        )
+        
+        # Projection heads to align dimensions for feature distillation
+        self.student_proj = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(embed_dim, teacher_feature_dim)
+        )
+        
+        # Loss functions
+        self.kl_div_loss = KLDivLoss(reduction='batchmean')
+        self.ce_loss = CrossEntropyLoss()
+        self.mse_loss = nn.MSELoss()
+        
+        # Metrics
+        self.val_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
+        self.test_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
+    
+    def forward(self, x):
+        """Forward pass through student model."""
+        return self.student(x)
+    
+    def configure_optimizers(self):
+        """Configure optimizer and learning rate scheduler."""
+        # Trainable: student + channel_adapters + RAA + AFP + projection
+        params = (
+            list(self.student.parameters()) +
+            list(self.channel_adapters.parameters()) +
+            list(self.raa.parameters()) +
+            list(self.afp.parameters()) +
+            list(self.student_proj.parameters())
+        )
+        
+        optimizer = torch.optim.AdamW(
+            params,
+            lr=self.learning_rate,
+            weight_decay=1e-4
+        )
+        
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=100,
+            eta_min=1e-6
+        )
+        
+        return [optimizer], [scheduler]
+    
+    def extract_student_stage_features(self, x: torch.Tensor) -> List[torch.Tensor]:
+        """
+        Extract features from multiple stages of the student CNN.
+        
+        For MobileNetV2 and similar CNNs, we extract features at different spatial
+        resolutions and use channel adapters to match expected dimensions.
+        
+        Args:
+            x: Input images (B, 3, H, W)
+            
+        Returns:
+            List of feature maps from different stages, each with correct channels
+        """
+        # Get final features from student
+        if hasattr(self.student, 'forward_features'):
+            final_feat = self.student.forward_features(x)
+        else:
+            # Fallback: use full forward and reshape
+            logits = self.student(x)
+            final_feat = logits.unsqueeze(-1).unsqueeze(-1)
+        
+        # Handle different feature shapes
+        if len(final_feat.shape) == 3:  # Transformer: (B, N, D)
+            final_feat = final_feat.transpose(1, 2).unsqueeze(-1)  # (B, D, N, 1)
+        
+        B, C, H, W = final_feat.shape
+        
+        # Create multi-scale features at different resolutions
+        # Use the channel adapters to project to expected dimensions
+        features = []
+        
+        for i, (target_ch, adapter) in enumerate(zip(self.student_channels, self.channel_adapters)):
+            # Different spatial sizes for different "stages"
+            if i == 0:
+                spatial_size = max(H, 4)
+            elif i == 1:
+                spatial_size = max(H // 2, 2)
+            elif i == 2:
+                spatial_size = max(H // 4, 1)
+            else:
+                spatial_size = 1
+            
+            # Pool to target spatial size
+            pooled = F.adaptive_avg_pool2d(final_feat, (spatial_size, spatial_size))
+            
+            # Adapt channels to expected dimension
+            adapted = adapter(pooled)  # (B, target_ch, spatial_size, spatial_size)
+            features.append(adapted)
+        
+        return features
+    
+    def extract_teacher_features(self, x: torch.Tensor):
+        """
+        Extract features and logits from teacher.
+        
+        Args:
+            x: Input images
+            
+        Returns:
+            features: Teacher features (B, D)
+            logits: Teacher logits (B, num_classes)
+        """
+        with torch.no_grad():
+            if hasattr(self.teacher, 'forward_features'):
+                features = self.teacher.forward_features(x)
+                
+                # Handle different feature shapes
+                if len(features.shape) == 4:  # CNN: (B, C, H, W)
+                    features = F.adaptive_avg_pool2d(features, 1).flatten(1)
+                elif len(features.shape) == 3:  # ViT: (B, N, D)
+                    features = features[:, 0]  # CLS token
+                
+                # Get logits
+                if hasattr(self.teacher, 'head'):
+                    logits = self.teacher.head(features)
+                elif hasattr(self.teacher, 'classifier'):
+                    logits = self.teacher.classifier(features)
+                elif hasattr(self.teacher, 'fc'):
+                    logits = self.teacher.fc(features)
+                else:
+                    logits = self.teacher(x)
+            else:
+                logits = self.teacher(x)
+                features = logits
+        
+        return features, logits
+    
+    def compute_pat_loss(
+        self,
+        student_logits: torch.Tensor,
+        student_aligned: torch.Tensor,
+        teacher_logits: torch.Tensor,
+        teacher_features: torch.Tensor,
+        teacher_adapted: torch.Tensor,
+        frozen_teacher_features: torch.Tensor,
+        labels: torch.Tensor
+    ):
+        """
+        Compute PAT loss with all components.
+        
+        L_PAT = L_CE + α·L_KL + β·L_FD + γ·L_Reg
+        
+        Args:
+            student_logits: Student's output logits
+            student_aligned: Student features after RAA alignment
+            teacher_logits: Teacher's output logits  
+            teacher_features: Teacher's features
+            teacher_adapted: Teacher features after AFP adaptation
+            frozen_teacher_features: Original frozen teacher features
+            labels: Ground truth labels
+            
+        Returns:
+            total_loss, log_dict
+        """
+        log_dict = {}
+        
+        # 1. L_CE: Cross-entropy with ground truth
+        loss_ce = self.ce_loss(student_logits, labels)
+        log_dict['loss_ce'] = loss_ce
+        
+        # 2. L_KL: Soft logit distillation
+        student_soft = F.log_softmax(student_logits / self.temperature, dim=1)
+        teacher_soft = F.softmax(teacher_logits / self.temperature, dim=1)
+        loss_kl = self.kl_div_loss(student_soft, teacher_soft) * (self.temperature ** 2)
+        log_dict['loss_kl'] = loss_kl
+        
+        # 3. L_FD: Feature distillation (RAA-student vs AFP-teacher)
+        # Project student aligned features to teacher dimension
+        student_proj = self.student_proj(student_aligned)
+        
+        # Normalize for stable comparison
+        student_proj_norm = F.normalize(student_proj, p=2, dim=1)
+        teacher_adapted_norm = F.normalize(teacher_adapted, p=2, dim=1)
+        
+        loss_fd = self.mse_loss(student_proj_norm, teacher_adapted_norm)
+        log_dict['loss_fd'] = loss_fd
+        
+        # 4. L_Reg: Regularization to anchor adapted teacher to frozen teacher
+        frozen_norm = F.normalize(frozen_teacher_features, p=2, dim=1)
+        adapted_norm = F.normalize(teacher_adapted, p=2, dim=1)
+        loss_reg = self.mse_loss(adapted_norm, frozen_norm)
+        log_dict['loss_reg'] = loss_reg
+        
+        # Total loss
+        loss_total = (
+            loss_ce + 
+            self.alpha * loss_kl + 
+            self.beta * loss_fd + 
+            self.gamma * loss_reg
+        )
+        log_dict['loss_total'] = loss_total
+        
+        return loss_total, log_dict
+    
+    def training_step(self, batch, batch_idx):
+        """Training step."""
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+        teacher_images = batch['teacher_input_0'].to(self.device)
+        
+        # 1. Extract student multi-stage features
+        student_stage_features = self.extract_student_stage_features(student_images)
+        
+        # 2. Apply RAA to get aligned student representation
+        student_aligned = self.raa(student_stage_features)  # (B, embed_dim)
+        
+        # 3. Get student logits
+        student_logits = self.student(student_images)
+        
+        # 4. Extract teacher features (frozen)
+        teacher_features, teacher_logits = self.extract_teacher_features(teacher_images)
+        frozen_teacher_features = teacher_features.clone()
+        
+        # 5. Apply AFP to adapt teacher features
+        student_proj_for_feedback = self.student_proj(student_aligned)
+        teacher_adapted = self.afp(
+            teacher_features,
+            student_proj_for_feedback,
+            frozen_teacher_features
+        )
+        
+        # 6. Compute PAT loss
+        loss_total, log_dict = self.compute_pat_loss(
+            student_logits=student_logits,
+            student_aligned=student_aligned,
+            teacher_logits=teacher_logits,
+            teacher_features=teacher_features,
+            teacher_adapted=teacher_adapted,
+            frozen_teacher_features=frozen_teacher_features,
+            labels=labels
+        )
+        
+        # Logging
+        self.log_dict({
+            'train/loss_ce': log_dict['loss_ce'],
+            'train/loss_kl': log_dict['loss_kl'],
+            'train/loss_fd': log_dict['loss_fd'],
+            'train/loss_reg': log_dict['loss_reg'],
+            'train/loss_total': loss_total,
+        }, on_epoch=True, prog_bar=True)
+        
+        return loss_total
+    
+    def shared_eval_step(self, batch, stage: str):
+        """Shared evaluation step for validation and test."""
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+        
+        # Get student predictions (no RAA/AFP needed for inference)
+        student_logits = self.student(student_images)
+        
+        # CE loss only for evaluation
+        loss = self.ce_loss(student_logits, labels)
+        
+        # Metrics
+        preds = student_logits.argmax(dim=1)
+        acc = (preds == labels).float().mean()
+        
+        # AUROC
+        if stage == 'val':
+            self.val_auroc(student_logits, labels)
+            self.log('val/auroc', self.val_auroc, on_epoch=True, prog_bar=True)
+        elif stage == 'test':
+            self.test_auroc(student_logits, labels)
+            self.log('test/auroc', self.test_auroc, on_epoch=True, prog_bar=True)
+        
+        self.log(f'{stage}/accuracy', acc, on_epoch=True, prog_bar=True)
+        self.log(f'{stage}/loss_total', loss, on_epoch=True, prog_bar=True)
+        
+        return acc
+    
+    def validation_step(self, batch, batch_idx):
+        """Validation step."""
+        return self.shared_eval_step(batch, 'val')
+    
+    def test_step(self, batch, batch_idx):
+        """Test step."""
+        return self.shared_eval_step(batch, 'test')
+
+
 class BaselineStudentModule(pl.LightningModule):
     """
     Baseline Student Module - Training from scratch without KD.

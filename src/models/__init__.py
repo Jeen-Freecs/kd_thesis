@@ -6,6 +6,9 @@ from .kd_module import (
     CAWeightedKDLitModule,
     DynamicKDLitModule,
     ConfidenceBasedKDLitModule,
+    PATKDLitModule,
+    RegionAwareAttention,
+    AdaptiveFeedbackPrompt,
     BaselineStudentModule
 )
 
@@ -15,6 +18,9 @@ __all__ = [
     "CAWeightedKDLitModule",
     "DynamicKDLitModule",
     "ConfidenceBasedKDLitModule",
+    "PATKDLitModule",
+    "RegionAwareAttention",
+    "AdaptiveFeedbackPrompt",
     "BaselineStudentModule",
 ]
 

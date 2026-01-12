@@ -10,6 +10,7 @@ from ..models.kd_module import (
     CAWeightedKDLitModule,
     DynamicKDLitModule,
     ConfidenceBasedKDLitModule,
+    PATKDLitModule,
     BaselineStudentModule
 )
 from ..data.datamodule import CIFAR100DataModule
@@ -213,10 +214,24 @@ def create_kd_module_from_config(
             use_hard_loss=kd_config.get('use_hard_loss', True)
         )
     
+    # PAT: Perspective-Aware Teaching (arXiv:2501.08885)
+    # For heterogeneous teacher-student architectures (CNN ↔ ViT)
+    elif kd_type == 'pat':
+        kd_module = PATKDLitModule(
+            **common_params,
+            alpha=kd_config.get('alpha', 1.0),           # L_KL weight
+            beta=kd_config.get('beta', 1.0),             # L_FD weight
+            gamma=kd_config.get('gamma', 0.1),           # L_Reg weight
+            student_channels=kd_config.get('student_channels', [24, 32, 64, 1280]),
+            teacher_feature_dim=kd_config.get('teacher_feature_dim', 768),
+            embed_dim=kd_config.get('embed_dim', 256),
+            num_heads=kd_config.get('num_heads', 8),
+        )
+    
     else:
         raise ValueError(
             f"Unknown KD type: {kd_type}. "
-            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence'"
+            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence', 'pat'"
         )
     
     return kd_module
