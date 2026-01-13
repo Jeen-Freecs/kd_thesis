@@ -4,13 +4,13 @@ Complete implementation of multi-teacher knowledge distillation methods for CIFA
 
 ## 🎯 Overview
 
-This project implements **three knowledge distillation methods** plus baseline training, achieving up to **75.38% accuracy** on CIFAR-100:
+This project implements **three knowledge distillation methods** plus baseline training, achieving up to **74.24% accuracy** on CIFAR-100:
 
-- **Baseline**: Student from scratch → 66.29%
-- **Method 1**: CA-WKD (Confidence-Aware Weighted KD) → 73.33%
-- **Method 2**: α-Guided CA-WKD (Dynamic gating) → 71.38%
-- **Method 3**: Adaptive α-Guided KD → **74.00%** (best multi-teacher)
-- **Single Teacher**: DenseNet-121 → **75.38%** (best overall)
+- **Baseline**: Student (MobileNetV2) from scratch → 69.84%
+- **Method 1**: CA-WKD (Confidence-Aware Weighted KD) → 73.92%
+- **Method 2**: α-Guided CA-WKD (Dynamic gating) → **74.24%** ⭐ (best overall)
+- **Method 3**: Adaptive α-Guided KD → 73.26%
+- **Single Teacher ViT**: → 73.19%
 
 ### Key Features
 
@@ -18,6 +18,7 @@ This project implements **three knowledge distillation methods** plus baseline t
 - ✅ **Automated Setup** - One-command installation for vast.ai/Linux
 - ✅ **Weights & Biases Integration** - Real-time experiment tracking
 - ✅ **Multiple Teacher Support** - ResNet, DenseNet, ViT ensembles
+- ✅ **PAT Framework** - Heterogeneous KD for CNN ↔ ViT
 - ✅ **PyTorch Lightning** - Modern training framework
 - ✅ **Production Ready** - Tested on vast.ai GPU instances
 
@@ -42,7 +43,7 @@ conda activate kd-env
 wandb login
 
 # 5. Start training best model!
-python scripts/train.py --config configs/single_teacher_densenet.yaml
+python scripts/train.py --config configs/method2_diverse_ensemble.yaml
 ```
 
 **That's it!** Training starts immediately. View results at https://wandb.ai
@@ -62,24 +63,24 @@ tail -f experiments.log
 
 ## 📊 All Experiments
 
-### Complete Experiment List
+### Complete Experiment List (Evaluated on Test Set)
 
 | Config File | Method | Teacher(s) | Accuracy | Training Time |
 |-------------|--------|------------|----------|---------------|
-| `baseline_config.yaml` | Baseline | None | 66.29% | 2-3h |
-| `single_teacher_densenet.yaml` | Single | DenseNet-121 | **75.38%** ⭐ | 4-6h |
-| `single_teacher_vit.yaml` | Single | ViT | 74.00% | 6-8h |
-| `single_teacher_resnet50.yaml` | Single | ResNet-50 | 73.75% | 4-6h |
-| `method1_ca_wkd.yaml` | Method 1 | R+D+V | 73.33% | 8-10h |
-| `method2_diverse_ensemble.yaml` | Method 2 | R+D+V | 71.38% | 8-10h |
-| `method2_dynamic_kd.yaml` | Method 2 | 3 ResNets | ~72% | 6-8h |
-| `method3_densenet_resnet_temp8.yaml` | Method 3 | D+R | **74.00%** ⭐ | 6-8h |
-| `method3_densenet_resnet_temp16.yaml` | Method 3 | D+R | 73.96% | 6-8h |
-| `method3_adaptive_alpha.yaml` | Method 3 | 3 ResNets | 72.90% | 6-8h |
-| `method3_diverse_ensemble.yaml` | Method 3 | R+D+V | 72.10% | 8-10h |
-| `method3_3resnets_no_ce.yaml` | Method 3 | 3 ResNets | 71.89% | 6-8h |
+| `baseline_config.yaml` | Baseline | None | 69.84% | 2-3h |
+| `single_teacher_densenet.yaml` | Single | DenseNet-121 | 71.99% | 4-6h |
+| `single_teacher_vit.yaml` | Single | ViT | 73.19% | 6-8h |
+| `single_teacher_resnet50.yaml` | Single | ResNet-50 | 72.81% | 4-6h |
+| `method1_ca_wkd.yaml` | Method 1 | R+D+V | 73.92% | 8-10h |
+| `method2_diverse_ensemble.yaml` | Method 2 | R+D+V (γ=10) | **74.24%** ⭐ | 8-10h |
+| `method2_dynamic_kd.yaml` | Method 2 | 3 ResNets (γ=5) | 72.53% | 6-8h |
+| `method3_densenet_resnet_temp8.yaml` | Method 3 | D+R (T=8) | 72.72% | 6-8h |
+| `method3_densenet_resnet_temp16.yaml` | Method 3 | D+R (T=16) | 73.26% | 6-8h |
+| `method3_adaptive_alpha.yaml` | Method 3 | 3 ResNets + CE | 71.60% | 6-8h |
+| `method3_diverse_ensemble.yaml` | Method 3 | R+D+V | 72.34% | 8-10h |
+| `method3_3resnets_no_ce.yaml` | Method 3 | 3 ResNets (no CE) | 72.12% | 6-8h |
 
-**Legend**: R=ResNet, D=DenseNet, V=ViT
+**Legend**: R=ResNet, D=DenseNet, V=ViT, T=Temperature, γ=Gamma
 
 ### Individual Experiment Commands
 
@@ -88,18 +89,18 @@ tail -f experiments.log
 python scripts/train.py --config configs/baseline_config.yaml
 
 # Best performers
-python scripts/train.py --config configs/single_teacher_densenet.yaml  # 75.38%
-python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml  # 74.00%
+python scripts/train.py --config configs/method2_diverse_ensemble.yaml  # 74.24% ⭐
+python scripts/train.py --config configs/method1_ca_wkd.yaml             # 73.92%
+python scripts/train.py --config configs/method3_densenet_resnet_temp16.yaml  # 73.26%
 
 # All single teachers
-python scripts/train.py --config configs/single_teacher_resnet50.yaml
-python scripts/train.py --config configs/single_teacher_vit.yaml
+python scripts/train.py --config configs/single_teacher_vit.yaml        # 73.19%
+python scripts/train.py --config configs/single_teacher_resnet50.yaml   # 72.81%
+python scripts/train.py --config configs/single_teacher_densenet.yaml   # 71.99%
 
 # All methods
-python scripts/train.py --config configs/method1_ca_wkd.yaml
-python scripts/train.py --config configs/method2_diverse_ensemble.yaml
 python scripts/train.py --config configs/method2_dynamic_kd.yaml
-python scripts/train.py --config configs/method3_densenet_resnet_temp16.yaml
+python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml
 python scripts/train.py --config configs/method3_adaptive_alpha.yaml
 python scripts/train.py --config configs/method3_diverse_ensemble.yaml
 python scripts/train.py --config configs/method3_3resnets_no_ce.yaml
@@ -182,8 +183,8 @@ bash install.sh
 conda activate kd-env
 wandb login
 
-# Start training
-python scripts/train.py --config configs/single_teacher_densenet.yaml
+# Start training (best model)
+python scripts/train.py --config configs/method2_diverse_ensemble.yaml
 ```
 
 ### Keep Training Running (If Connection Drops)
@@ -349,7 +350,7 @@ python scripts/train.py --config configs/method1_ca_wkd.yaml
 python scripts/train.py --config configs/method2_diverse_ensemble.yaml
 ```
 
-### Method 3: Adaptive α-Guided KD (Best Multi-Teacher)
+### Method 3: Adaptive α-Guided KD (Most Confident Teacher)
 
 **How it works**:
 - Selects the most confident teacher for each sample
@@ -358,23 +359,23 @@ python scripts/train.py --config configs/method2_diverse_ensemble.yaml
 
 **Formula**: `L_total = α * L_KL* + (1-α) * L_CE` where α = mean(max_k p_Tk(y|x))
 
-**Use when**: You want best multi-teacher performance without tuning
+**Use when**: You want automatic teacher selection without tuning
 
 ```bash
-python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml  # Best
+python scripts/train.py --config configs/method3_densenet_resnet_temp16.yaml  # 73.26%
 ```
 
-### Single Teacher (Simplest, Often Best)
+### Single Teacher (Simplest)
 
 **How it works**:
-- One strong teacher (DenseNet-121)
-- Fixed α = 0.5 (balanced)
+- One strong teacher (ViT, ResNet, or DenseNet)
+- Fixed α = 0.25-0.75 (tuned per teacher)
 - Simpler than multi-teacher
 
-**Use when**: You want maximum accuracy with simplest setup
+**Use when**: You want simplicity with good accuracy
 
 ```bash
-python scripts/train.py --config configs/single_teacher_densenet.yaml  # 75.38%
+python scripts/train.py --config configs/single_teacher_vit.yaml  # 73.19%
 ```
 
 ---
@@ -383,21 +384,21 @@ python scripts/train.py --config configs/single_teacher_densenet.yaml  # 75.38%
 
 ### Key Findings
 
-1. **Single teacher (DenseNet-121) is best overall**: 75.38%
-2. **Best multi-teacher matches single ViT**: Method 3 with temp=8.0 → 74.00%
-3. **Temperature matters**: Increasing from 4.0 to 8.0 improves multi-teacher by +2%
-4. **Two teachers better than three**: DenseNet+ResNet (74.00%) > 3 ResNets (72.90%)
-5. **Ground truth helps**: Using CE loss adds ~1% accuracy
+1. **Method 2 (Dynamic α-Guided) is best overall**: 74.24% with diverse ensemble (γ=10)
+2. **Method 1 (CA-WKD) is second best**: 73.92% with R+D+V ensemble
+3. **Single ViT outperforms DenseNet**: ViT (73.19%) > ResNet (72.81%) > DenseNet (71.99%)
+4. **Temperature 16 better than 8**: T=16 (73.26%) > T=8 (72.72%) for Method 3
+5. **Dynamic gating (Method 2) > Static confidence (Method 3)**: Adaptive α helps
 
 ### Performance Comparison
 
 | Approach | Accuracy | Complexity | Training Time |
 |----------|----------|------------|---------------|
-| Baseline | 66.29% | Simplest | 2-3h |
-| Single Teacher | **75.38%** | Simple | 4-6h |
-| Multi-Teacher (Method 3) | **74.00%** | Medium | 6-8h |
+| Baseline | 69.84% | Simplest | 2-3h |
+| Single Teacher (ViT) | 73.19% | Simple | 6-8h |
+| Multi-Teacher (Method 2) | **74.24%** ⭐ | Medium | 8-10h |
 
-**Recommendation**: Use single teacher (DenseNet-121) for production
+**Recommendation**: Use Method 2 with diverse ensemble (γ=10) for best accuracy
 
 ---
 
@@ -517,11 +518,11 @@ python scripts/train.py --config configs/baseline_config.yaml
 ### Day 2: Best Experiments (10-14 hours)
 
 ```bash
-# Best single teacher
-python scripts/train.py --config configs/single_teacher_densenet.yaml
+# Best overall (Method 2)
+python scripts/train.py --config configs/method2_diverse_ensemble.yaml  # 74.24%
 
-# Best multi-teacher
-python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml
+# Best single teacher
+python scripts/train.py --config configs/single_teacher_vit.yaml  # 73.19%
 ```
 
 ### Day 3-4: Full Ablation Study
@@ -642,11 +643,11 @@ For issues or questions:
 # Setup
 bash install.sh && conda activate kd-env && wandb login
 
-# Best single teacher
-python scripts/train.py --config configs/single_teacher_densenet.yaml
+# Best overall (Method 2 - 74.24%)
+python scripts/train.py --config configs/method2_diverse_ensemble.yaml
 
-# Best multi-teacher
-python scripts/train.py --config configs/method3_densenet_resnet_temp8.yaml
+# Best single teacher (ViT - 73.19%)
+python scripts/train.py --config configs/single_teacher_vit.yaml
 
 # All experiments
 bash run_all_experiments.sh
@@ -661,12 +662,31 @@ python scripts/evaluate.py --checkpoint <path> --config <config>
 
 ---
 
+## 📈 Final Results Summary
+
+| Rank | Method | Config | Test Accuracy |
+|------|--------|--------|---------------|
+| 🥇 1 | Method 2 (Dynamic, γ=10) | `method2_diverse_ensemble.yaml` | **74.24%** |
+| 🥈 2 | Method 1 (CA-WKD) | `method1_ca_wkd.yaml` | 73.92% |
+| 🥉 3 | Method 3 (T=16) | `method3_densenet_resnet_temp16.yaml` | 73.26% |
+| 4 | Single ViT (α=0.25) | `single_teacher_vit.yaml` | 73.19% |
+| 5 | Single ResNet (α=0.75) | `single_teacher_resnet50.yaml` | 72.81% |
+| 6 | Method 3 (T=8) | `method3_densenet_resnet_temp8.yaml` | 72.72% |
+| 7 | Method 2 (γ=5) | `method2_dynamic_kd.yaml` | 72.53% |
+| 8 | Method 3 (Diverse) | `method3_diverse_ensemble.yaml` | 72.34% |
+| 9 | Method 3 (NoCE) | `method3_3resnets_no_ce.yaml` | 72.12% |
+| 10 | Single DenseNet (α=0.50) | `single_teacher_densenet.yaml` | 71.99% |
+| 11 | Method 3 (WithCE) | `method3_adaptive_alpha.yaml` | 71.60% |
+| 12 | Baseline | `baseline_config.yaml` | 69.84% |
+
+---
+
 **🎯 You're ready to train! Start with:**
 ```bash
 bash install.sh
 conda activate kd-env
 wandb login
-python scripts/train.py --config configs/single_teacher_densenet.yaml
+python scripts/train.py --config configs/method2_diverse_ensemble.yaml
 ```
 
 **Happy Training! 🚀**

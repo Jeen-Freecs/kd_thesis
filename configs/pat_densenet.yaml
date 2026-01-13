@@ -33,7 +33,7 @@ kd:
   beta: 1.0                   # Weight for L_FD (feature distillation)
   gamma: 0.1                  # Weight for L_Reg (regularization)
   student_channels: [24, 32, 64, 1280]  # MobileNetV2 stage channels
-  teacher_feature_dim: 342    # DenseNet-121 CIFAR feature dimension
+  teacher_feature_dim: 384    # DenseNet-121 CIFAR feature dimension (growth_rate=12, block_config=(6,12,24,16))
   embed_dim: 256              # RAA embedding dimension
   num_heads: 8                # RAA attention heads
 

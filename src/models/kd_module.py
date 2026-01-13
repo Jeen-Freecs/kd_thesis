@@ -1344,6 +1344,14 @@ class PATKDLitModule(pl.LightningModule):
                     logits = self.teacher.fc(features)
                 else:
                     logits = self.teacher(x)
+            elif hasattr(self.teacher, 'features') and hasattr(self.teacher, 'classifier'):
+                # Handle torchvision DenseNet (and similar models)
+                # DenseNet structure: features (Sequential) -> ReLU -> Pool -> classifier
+                features = self.teacher.features(x)
+                features = F.relu(features, inplace=False)
+                features = F.adaptive_avg_pool2d(features, (1, 1))
+                features = torch.flatten(features, 1)
+                logits = self.teacher.classifier(features)
             else:
                 logits = self.teacher(x)
                 features = logits
