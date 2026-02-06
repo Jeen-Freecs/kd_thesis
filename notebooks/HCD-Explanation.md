@@ -74,10 +74,14 @@ Traditional KD methods face issues when teacher and student have different archi
 │        │    │  z_fused = λ_s·z_sub + λ_t·z_t      │                  │
 │        │    └────────────┬────────────────────────┘                  │
 │        │                 │                                           │
+│        │          ┌──────┴──────┐                                    │
+│        │          │   DETACH    │  ← KL targets must be detached     │
+│        │          └──────┬──────┘                                    │
 │        ▼                 ▼                                           │
 │   ┌─────────────────────────────────────────────┐                    │
 │   │              Loss Computation                │                    │
 │   │  L = L_gt + L_hcd + L_orthogonality          │                    │
+│   │  (averaged across stages, not summed)         │                    │
 │   └─────────────────────────────────────────────┘                    │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -125,9 +129,11 @@ Where $\lambda_s = \lambda_t = 1.0$ (default).
 
 ### 4. Orthogonality Loss (OL)
 
-To ensure sub-logit diversity, mask ground-truth class and penalize high similarity:
+To ensure sub-logit diversity, **zero out** the ground-truth class and penalize high similarity:
 
-$$\mathbf{z}_{masked} = \text{RemoveOneHot}(\mathbf{z}_{sub}, y)$$
+$$\mathbf{z}_{masked} = \text{ZeroMask}(\mathbf{z}_{sub}, y)$$
+
+> **Implementation note**: The ground-truth position is zeroed (set to 0), not replaced with a large negative value. Using `-1e6` causes overflow to `Inf` under float16 AMP (max float16 = 65504), which propagates `NaN` through `F.normalize`.
 
 Normalize and compute pairwise similarity:
 
@@ -145,21 +151,83 @@ $$\mathcal{L}_{orth} = \mathbb{E}\left[\text{ReLU}(\mathbf{S}_{off-diag} - \thet
 
 $$\mathcal{L}_{total} = \mathcal{L}_{gt} + \mathcal{L}_{hcd} + \mathcal{L}_{orth}$$
 
+> **Implementation note**: All losses are **averaged** across stages (not summed). Summing 4 stages causes the HCD loss (~400) to overwhelm the GT loss (~20), preventing the student from learning the classification task.
+
 ### 1. Ground Truth Loss ($\mathcal{L}_{gt}$)
 
-Cross-entropy on student logits + CE on fused sub-logits:
+Cross-entropy on student logits + averaged CE on fused sub-logits:
 
-$$\mathcal{L}_{gt} = \omega \cdot \left[ \text{CE}(\mathbf{z}^s, y) + \sum_{i=1}^{4} \sum_{j=1}^{k} \frac{1}{k} \text{CE}(\mathbf{z}_{fused}^{i,j}, y) \right]$$
+$$\mathcal{L}_{gt} = \omega \cdot \left[ \text{CE}(\mathbf{z}^s, y) + \frac{1}{N_{\text{stages}}} \sum_{i=1}^{4} \frac{1}{k} \sum_{j=1}^{k} \text{CE}(\mathbf{z}_{fused}^{i,j}, y) \right]$$
 
 ### 2. HCD Loss ($\mathcal{L}_{hcd}$)
 
-KL divergence from student to fused sub-logits:
+KL divergence from student to **detached** fused sub-logits:
 
-$$\mathcal{L}_{hcd} = \lambda \cdot \sum_{i=1}^{4} \sum_{j=1}^{k} \frac{1}{k} \text{KL}\left( \sigma(\mathbf{z}^s / T) \| \sigma(\mathbf{z}_{fused}^{i,j} / T) \right) \cdot T^2$$
+$$\mathcal{L}_{hcd} = \frac{\lambda}{N_{\text{stages}}} \sum_{i=1}^{4} \frac{1}{k} \sum_{j=1}^{k} \text{KL}\left( \sigma(\mathbf{z}^s / T) \| \sigma(\text{sg}[\mathbf{z}_{fused}^{i,j}] / T) \right) \cdot T^2$$
+
+Where $\text{sg}[\cdot]$ denotes **stop-gradient** (`.detach()`).
+
+> **Why detach?** The fused sub-logits depend on student features via the CFM. Without detaching, the KL gradient flows backward through the sub_logits, pushing them *away* from the student distribution (because minimizing KL by moving the target is easier than moving the student). This conflicts with the CE loss that trains the CFM to produce correct predictions. Detaching ensures:
+> - **CE** trains the CFM to produce good sub-logits ✓
+> - **KL** trains the **student only** to match those sub-logits ✓
 
 ### 3. Orthogonality Loss ($\mathcal{L}_{orth}$)
 
-$$\mathcal{L}_{orth} = \beta \cdot \sum_{i=1}^{4} \text{OL}(\mathbf{z}_{sub}^i)$$
+$$\mathcal{L}_{orth} = \frac{\beta}{N_{\text{stages}}} \sum_{i=1}^{4} \text{OL}(\mathbf{z}_{sub}^i)$$
+
+---
+
+## ⚠️ Implementation Pitfalls & Fixes
+
+Our implementation encountered and resolved several critical issues:
+
+### 1. Float16 AMP Overflow in Masking
+
+| Issue | Fix |
+|-------|-----|
+| `_hcd_remove_one_hot` used `-1e6` mask value | Changed to zeroing out: `logits * (1 - mask)` |
+| Float16 max = 65504, so `1e6` → `Inf` | Zero-masking avoids all overflow issues |
+| `Inf` in `F.normalize` → `NaN` propagation | Clean normalization on non-label dimensions |
+
+### 2. `_init_weights` Destroyed Pretrained Weights
+
+| Issue | Fix |
+|-------|-----|
+| `self.modules()` iterates over ALL submodules | Only init `stage_projectors` and `cfm` |
+| Teacher's pretrained weights were re-randomized | Teacher weights preserved |
+| Student's pre-init from timm was destroyed | Student weights preserved |
+
+### 3. Dynamic Modules Not in Optimizer
+
+| Issue | Fix |
+|-------|-----|
+| `_channel_proj_{i}` created with `setattr` in forward | Pre-registered as `nn.ModuleList` in `__init__` |
+| Not in optimizer's param list | Added to `configure_optimizers` |
+| Gradients computed but never applied | Now properly optimized |
+
+### 4. Conflicting Gradients from Undeteached KL Targets
+
+| Issue | Fix |
+|-------|-----|
+| Sub_logits used as KL targets without `.detach()` | Added `.detach()` on sub_logits in KL |
+| KL gradient pushed sub_logits *away* from student | KL now only updates student parameters |
+| CE and KL gave conflicting signals to CFM | CFM trained by CE only, student by KL only |
+
+### 5. Loss Scale Explosion
+
+| Issue | Fix |
+|-------|-----|
+| Losses summed over 4 stages: effective weight 24× CE | Averaged across stages: effective weight 6× CE |
+| `loss_hcd` ≈ 400 vs `loss_gt` ≈ 20 | Balanced loss magnitudes |
+| GT signal completely drowned out | Student can now learn from ground truth |
+
+### 6. Temperature Too Low
+
+| Issue | Fix |
+|-------|-----|
+| `T=1.0` gives sharp, peaked distributions | Enforce minimum `T=3.0` for KL computation |
+| Large, noisy KL gradients | Softer distributions expose inter-class relationships |
+| No "dark knowledge" transfer | Better knowledge transfer signal |
 
 ---
 
@@ -169,11 +237,11 @@ $$\mathcal{L}_{orth} = \beta \cdot \sum_{i=1}^{4} \text{OL}(\mathbf{z}_{sub}^i)$
 
 | Parameter | Symbol | Default | Description |
 |-----------|--------|---------|-------------|
-| `hcd_loss_weight` | $\lambda$ | 6.0 | Weight for HCD KL loss |
+| `hcd_loss_weight` | $\lambda$ | 6.0 | Weight for HCD KL loss (applied to per-stage average) |
 | `gt_loss_weight` | $\omega$ | 1.0 | Weight for CE losses |
 | `diversity` | $\beta$ | 1.0 | Weight for orthogonality loss |
 | `k` | $k$ | 4 | Number of sub-logits |
-| `temperature` | $T$ | 1.0 | KL softmax temperature |
+| `temperature` | $T$ | 1.0 (min 3.0 enforced) | KL softmax temperature |
 | `ortho_threshold` | $\theta$ | 0.5 | Orthogonality threshold |
 | `lambda_student` | $\lambda_s$ | 1.0 | Sub-logit fusion weight |
 | `lambda_teacher` | $\lambda_t$ | 1.0 | Teacher logit fusion weight |
@@ -200,13 +268,13 @@ $$\mathcal{L}_{orth} = \beta \cdot \sum_{i=1}^{4} \text{OL}(\mathbf{z}_{sub}^i)$
 ```python
 def _hcd_remove_one_hot(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
     """
-    Mask ground-truth class position before orthogonality computation.
-    Sets label position to -1e6.
+    Zero out ground-truth class position before orthogonality computation.
+    Uses zero-masking (NOT large negative values) to avoid float16 overflow.
     """
     B, k, C = logits.shape
     mask = torch.zeros_like(logits)
     mask.scatter_(2, labels.unsqueeze(1).unsqueeze(2).expand(B, k, 1), 1)
-    masked_logits = logits * (1 - mask) - mask * 1e6
+    masked_logits = logits * (1 - mask)  # Zero out label position
     return masked_logits
 
 
@@ -253,6 +321,15 @@ class HCDKDLitModule(pl.LightningModule):
             )
             for _ in stages
         ])
+        
+        # Channel projectors registered properly (not dynamic setattr)
+        self.channel_projs = nn.ModuleList([
+            nn.Conv2d(student_final_dim, ch, 1) if ch != student_final_dim else nn.Identity()
+            for ch in student_channels
+        ])
+        
+        # _init_weights() only initializes stage_projectors and cfm
+        # NOT the pretrained teacher or student
 ```
 
 #### Loss Computation
@@ -261,6 +338,8 @@ class HCDKDLitModule(pl.LightningModule):
 def compute_hcd_loss(self, student_logits, student_stage_features, 
                      teacher_features, teacher_logits, labels):
     hcd_losses, entropy_losses, orthogonality_losses = [], [], []
+    T = max(self.temperature, 3.0)  # Enforce minimum temperature
+    num_stages = len(student_stage_features)
     
     for stage_idx, (stage_feat, projector, cfm) in enumerate(...):
         # 1) Project student features
@@ -279,15 +358,19 @@ def compute_hcd_loss(self, student_logits, student_stage_features,
         masked_logits = _hcd_remove_one_hot(logits_student_head, labels)
         orthogonality_losses.append(_hcd_orthogonality_loss(masked_logits))
         
-        # 6) KL + CE per sub-logit
+        # 6) CE trains the CFM
         for i in range(k):
             entropy_losses.append(CE(logits_student_head[:, i], labels) / k)
-            hcd_losses.append(KL(student || fused[:, i]) / k)
+        
+        # 7) KL trains the STUDENT (sub_logits are DETACHED)
+        sub_logits_detached = logits_student_head.detach()
+        for i in range(k):
+            hcd_losses.append(KL(student || detached_fused[:, i]) * T² / k)
     
-    # Combine
-    loss_gt = gt_weight * (CE(student, labels) + sum(entropy_losses))
-    loss_hcd = hcd_weight * sum(hcd_losses)
-    loss_orth = diversity * sum(orthogonality_losses)
+    # AVERAGE across stages (not sum) to balance with GT loss
+    loss_gt = gt_weight * (CE(student, labels) + sum(entropy) / num_stages)
+    loss_hcd = hcd_weight * sum(hcd_losses) / num_stages
+    loss_orth = diversity * sum(orthogonality) / num_stages
     
     return loss_gt + loss_hcd + loss_orth
 ```
@@ -327,12 +410,12 @@ def compute_hcd_loss(self, student_logits, student_stage_features,
 ## 🔗 Config Example
 
 ```yaml
-# configs/hcd_vit.yaml
+# configs/hcd_densenet.yaml
 kd:
   type: "hcd"
-  temperature: 1.0
+  temperature: 1.0            # min 3.0 enforced internally for KL
   learning_rate: 0.05
-  hcd_loss_weight: 6.0
+  hcd_loss_weight: 6.0        # applied to per-stage AVERAGE
   gt_loss_weight: 1.0
   diversity: 1.0
   k: 4
@@ -340,7 +423,8 @@ kd:
   lambda_student: 1.0
   lambda_teacher: 1.0
   student_channels: [24, 32, 64, 1280]
-  teacher_feature_dim: 768  # ViT-Base
+  student_final_dim: 1280
+  teacher_feature_dim: 384    # DenseNet-121 CIFAR (growth=12, blocks=(6,12,24,16))
 ```
 
 ---
@@ -367,6 +451,9 @@ python scripts/train.py --config configs/hcd_resnet50.yaml
 3. **Sub-logit Diversity**: Orthogonality loss prevents redundant knowledge transfer
 4. **Simple Yet Effective**: CFM is just `Linear → ReLU → Linear`, no complex attention
 5. **Teacher Logit Fusion**: Fusing teacher logits corrects classification, prevents drift
+6. **Detach KL Targets**: Sub_logits must be detached in KL to prevent conflicting gradients between CE and KL
+7. **Average, Don't Sum**: Per-stage losses must be averaged to prevent loss scale explosion
+8. **AMP Safety**: Masking values must stay within float16 range (max 65504)
 
 ---
 

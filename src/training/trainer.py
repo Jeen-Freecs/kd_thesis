@@ -11,6 +11,7 @@ from ..models.kd_module import (
     DynamicKDLitModule,
     ConfidenceBasedKDLitModule,
     PATKDLitModule,
+    HCDKDLitModule,
     BaselineStudentModule
 )
 from ..data.datamodule import CIFAR100DataModule

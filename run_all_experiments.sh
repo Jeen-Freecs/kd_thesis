@@ -46,9 +46,9 @@ CONFIGS=(
     
     # PAT: Perspective-Aware Teaching (arXiv:2501.08885)
     # For heterogeneous architectures (CNN ↔ ViT)
-    "configs/pat_densenet.yaml"
-    "configs/pat_resnet50.yaml"
-    "configs/pat_vit.yaml"
+    "configs/hcd_densenet.yaml"
+    # "configs/hcd_resnet50.yaml"
+    # "configs/hcd_vit.yaml"
 )
 
 ###############################################################################
