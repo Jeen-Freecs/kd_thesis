@@ -161,6 +161,8 @@ def create_kd_module_from_config(
     - 'dynamic': Method 2 - α-Guided CA-WKD (with gating)
     - 'confidence': Method 3 - Adaptive α-Guided KD (most confident teacher)
     - 'baseline': Baseline student without KD
+    - 'pat': PAT for heterogeneous distillation
+    - 'hcd': HCD for heterogeneous complementary distillation
     
     Args:
         config: Configuration dictionary
@@ -228,10 +230,28 @@ def create_kd_module_from_config(
             num_heads=kd_config.get('num_heads', 8),
         )
     
+    # HCD: Heterogeneous Complementary Distillation (arXiv:2511.10942)
+    # Official implementation: https://github.com/yema-web/HCD
+    elif kd_type == 'hcd':
+        kd_module = HCDKDLitModule(
+            **common_params,
+            hcd_loss_weight=kd_config.get('hcd_loss_weight', 6.0),
+            gt_loss_weight=kd_config.get('gt_loss_weight', 1.0),
+            diversity=kd_config.get('diversity', 1.0),
+            student_channels=kd_config.get('student_channels', [24, 32, 64, 1280]),
+            student_final_dim=kd_config.get('student_final_dim', 1280),
+            teacher_feature_dim=kd_config.get('teacher_feature_dim', 768),
+            embed_dim=kd_config.get('embed_dim', 256),
+            k=kd_config.get('k', 4),
+            ortho_threshold=kd_config.get('ortho_threshold', 0.5),
+            lambda_student=kd_config.get('lambda_student', 1.0),
+            lambda_teacher=kd_config.get('lambda_teacher', 1.0),
+        )
+    
     else:
         raise ValueError(
             f"Unknown KD type: {kd_type}. "
-            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence', 'pat'"
+            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence', 'pat', 'hcd'"
         )
     
     return kd_module

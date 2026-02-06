@@ -18,6 +18,7 @@ data/
 
 logs/
 
+HCD/
 # Environment
 venv/
 env/

@@ -1511,6 +1511,482 @@ class PATKDLitModule(pl.LightningModule):
         return self.shared_eval_step(batch, 'test')
 
 
+def _hcd_remove_one_hot(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """
+    Mask out the ground-truth class position before computing orthogonality.
+    Sets the label position to a very small value (-1e6).
+    
+    Args:
+        logits: (B, k, C) sub-logits
+        labels: (B,) ground truth labels
+        
+    Returns:
+        Masked logits with ground-truth position zeroed out
+    """
+    B, k, C = logits.shape
+    mask = torch.zeros_like(logits)
+    mask.scatter_(2, labels.unsqueeze(1).unsqueeze(2).expand(B, k, 1), 1)
+    masked_logits = logits * (1 - mask) - mask * 1e6
+    return masked_logits
+
+
+def _hcd_orthogonality_loss(vectors: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
+    """
+    Compute orthogonality loss among sub-logit vectors.
+    Uses squared penalty on excess similarity above threshold.
+    
+    Reference: Official HCD implementation
+    
+    Args:
+        vectors: (B, k, C) normalized sub-logits
+        threshold: Similarity threshold (default 0.5)
+        
+    Returns:
+        Orthogonality loss scalar
+    """
+    B, k, C = vectors.shape
+    vectors = F.normalize(vectors, p=2, dim=-1)
+    
+    # Compute pairwise dot products
+    dot_product = torch.einsum('bik,bjk->bij', vectors, vectors)  # (B, k, k)
+    
+    # Extract off-diagonal elements
+    mask = torch.eye(k, device=vectors.device).bool()
+    off_diagonal = dot_product[:, ~mask].view(B, k, k - 1)  # (B, k, k-1)
+    
+    # Squared penalty on excess similarity
+    excess_sim = torch.relu(off_diagonal - threshold)
+    loss = torch.mean(excess_sim.pow(2))
+    return loss
+
+
+class HCDKDLitModule(pl.LightningModule):
+    """
+    HCD: Heterogeneous Complementary Distillation (feature-based KD).
+    
+    Official implementation adapted from: https://github.com/yema-web/HCD
+    Reference: Xu et al. "Heterogeneous Complementary Distillation" arXiv:2511.10942
+    
+    Loss formulation:
+        loss_total = loss_gt + loss_hcd + loss_orthogonality
+        
+    Where:
+        loss_gt = gt_loss_weight * (CE(student, labels) + sum(CE(fused_sublogits, labels)))
+        loss_hcd = hcd_loss_weight * sum(KL(student || fused_sublogits))
+        loss_orthogonality = diversity * sum(orthogonality_loss(masked_sublogits))
+    """
+    
+    def __init__(
+        self,
+        teacher_models: List[nn.Module],
+        student_model: nn.Module,
+        temperature: float = 1.0,            # ofa_temperature in official
+        learning_rate: float = 0.05,         # SGD lr in official
+        hcd_loss_weight: float = 6.0,        # Weight for HCD KL loss
+        gt_loss_weight: float = 1.0,         # Weight for CE losses
+        diversity: float = 1.0,              # Weight for orthogonality loss
+        num_classes: int = 100,
+        student_channels: List[int] = None,  # Stage channels for student
+        student_final_dim: int = 1280,       # Final student feature dim
+        teacher_feature_dim: int = 768,      # Penultimate teacher feature dim
+        embed_dim: int = 256,                # Projected stage feature dim (max(feat_s, feat_t))
+        k: int = 4,                          # Number of sub-logits (hardcoded in official)
+        ortho_threshold: float = 0.5,        # Orthogonality threshold
+        lambda_student: float = 1.0,         # Weight for sub-logits in fusion
+        lambda_teacher: float = 1.0,         # Weight for teacher logits in fusion
+    ):
+        """
+        Initialize HCD module matching official implementation.
+        
+        Args:
+            teacher_models: List of pre-trained teacher models (single teacher)
+            student_model: Student model to be trained
+            temperature: Temperature for KL softmax (ofa_temperature)
+            learning_rate: Learning rate for optimizer
+            hcd_loss_weight: Weight for HCD KL distillation loss
+            gt_loss_weight: Weight for ground-truth CE losses
+            diversity: Weight for orthogonality loss
+            num_classes: Number of output classes
+            student_channels: Channel dims at each student stage
+            student_final_dim: Final feature dimension of the student
+            teacher_feature_dim: Teacher's penultimate feature dimension
+            embed_dim: Projection dimension for student stage features
+            k: Number of sub-logits for SDD (default 4)
+            ortho_threshold: Threshold for orthogonality loss
+            lambda_student: Weight for sub-logits in fusion
+            lambda_teacher: Weight for teacher logits in fusion
+        """
+        super().__init__()
+        
+        self.save_hyperparameters(ignore=["teacher_models", "student_model"])
+        
+        self.temperature = temperature
+        self.learning_rate = learning_rate
+        self.hcd_loss_weight = hcd_loss_weight
+        self.gt_loss_weight = gt_loss_weight
+        self.diversity = diversity
+        self.num_classes = num_classes
+        self.embed_dim = embed_dim
+        self.k = k
+        self.ortho_threshold = ortho_threshold
+        self.lambda_student = lambda_student
+        self.lambda_teacher = lambda_teacher
+        self.teacher_feature_dim = teacher_feature_dim
+        self.student_final_dim = student_final_dim
+        
+        if student_channels is None:
+            student_channels = [24, 32, 64, 1280]
+        self.student_channels = student_channels
+        self.num_stages = len(student_channels)
+        
+        if student_model is None:
+            raise ValueError("A student model must be provided.")
+        self.student = student_model
+        
+        if not teacher_models or len(teacher_models) == 0:
+            raise ValueError("Teacher model must be provided for HCD.")
+        self.teacher = teacher_models[0]
+        self.teacher.eval()
+        for param in self.teacher.parameters():
+            param.requires_grad = False
+        
+        # Per-stage projectors: project student features to embed_dim
+        # Matching official: SepConv blocks for CNN, then pool to vector
+        self.stage_projectors = nn.ModuleList()
+        for i, ch in enumerate(student_channels):
+            if i < len(student_channels) - 1:
+                # Earlier stages: need more downsampling
+                down_sample_num = len(student_channels) - 1 - i
+                layers = []
+                in_ch = ch
+                for j in range(down_sample_num):
+                    if j == down_sample_num - 1:
+                        out_ch = max(self.student_final_dim, teacher_feature_dim)
+                    else:
+                        out_ch = in_ch * 2
+                    layers.append(self._make_sep_conv(in_ch, out_ch))
+                    in_ch = out_ch
+                layers.append(nn.AdaptiveAvgPool2d(1))
+                layers.append(nn.Flatten())
+                self.stage_projectors.append(nn.Sequential(*layers))
+            else:
+                # Final stage: just 1x1 conv + pool
+                self.stage_projectors.append(nn.Sequential(
+                    nn.Conv2d(ch, max(self.student_final_dim, teacher_feature_dim), 1, 1, 0),
+                    nn.AdaptiveAvgPool2d(1),
+                    nn.Flatten()
+                ))
+        
+        # Per-stage CFM (linear): [student_feat || teacher_feat] -> k * num_classes
+        combined_dim = max(self.student_final_dim, teacher_feature_dim) + teacher_feature_dim
+        self.cfm = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(combined_dim, teacher_feature_dim),
+                nn.ReLU(),
+                nn.Linear(teacher_feature_dim, k * num_classes),
+            )
+            for _ in student_channels
+        ])
+        
+        # Initialize weights
+        self._init_weights()
+        
+        # Loss functions
+        self.ce_loss = CrossEntropyLoss()
+        
+        # Metrics
+        self.val_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
+        self.test_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
+    
+    def _make_sep_conv(self, in_ch: int, out_ch: int) -> nn.Module:
+        """Create SepConv block matching official implementation."""
+        return nn.Sequential(
+            nn.Conv2d(in_ch, in_ch, kernel_size=3, stride=2, padding=1, groups=in_ch, bias=False),
+            nn.Conv2d(in_ch, in_ch, kernel_size=1, padding=0, bias=False),
+            nn.BatchNorm2d(in_ch),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(in_ch, in_ch, kernel_size=3, stride=1, padding=1, groups=in_ch, bias=False),
+            nn.Conv2d(in_ch, out_ch, kernel_size=1, padding=0, bias=False),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=False),
+        )
+    
+    def _init_weights(self):
+        """Initialize weights matching official implementation."""
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Linear):
+                nn.init.trunc_normal_(m.weight, std=0.02)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+    
+    def forward(self, x):
+        """Forward pass through student model."""
+        return self.student(x)
+    
+    def configure_optimizers(self):
+        """Configure optimizer and learning rate scheduler matching official."""
+        params = (
+            list(self.student.parameters()) +
+            list(self.stage_projectors.parameters()) +
+            list(self.cfm.parameters())
+        )
+        
+        # Official uses SGD with momentum
+        optimizer = torch.optim.SGD(
+            params,
+            lr=self.learning_rate,
+            momentum=0.9,
+            weight_decay=2e-3
+        )
+        
+        # Cosine annealing scheduler
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=300,  # Official uses 300 epochs
+            eta_min=1e-3
+        )
+        
+        return [optimizer], [scheduler]
+    
+    def extract_student_stage_features(self, x: torch.Tensor) -> List[torch.Tensor]:
+        """
+        Extract features from multiple stages of the student CNN.
+        For simplicity, we use the final feature map and create multi-scale versions.
+        """
+        if hasattr(self.student, 'forward_features'):
+            final_feat = self.student.forward_features(x)
+        else:
+            logits = self.student(x)
+            final_feat = logits.unsqueeze(-1).unsqueeze(-1)
+        
+        if len(final_feat.shape) == 2:  # (B, C)
+            final_feat = final_feat.unsqueeze(-1).unsqueeze(-1)
+        elif len(final_feat.shape) == 3:  # Transformer: (B, N, D)
+            final_feat = final_feat.transpose(1, 2).unsqueeze(-1)
+        
+        B, C, H, W = final_feat.shape
+        features = []
+        
+        # Create multi-scale features at different spatial sizes
+        # Stage 1: largest spatial, Stage 4: 1x1
+        for i in range(self.num_stages):
+            if i == 0:
+                spatial_size = max(H, 8)
+            elif i == 1:
+                spatial_size = max(H // 2, 4)
+            elif i == 2:
+                spatial_size = max(H // 4, 2)
+            else:
+                spatial_size = 1
+            
+            # Resize to target spatial size
+            if spatial_size != H or spatial_size != W:
+                feat = F.adaptive_avg_pool2d(final_feat, (spatial_size, spatial_size))
+            else:
+                feat = final_feat
+            
+            # Project to expected channel dimension for this stage
+            target_ch = self.student_channels[i]
+            if C != target_ch:
+                # Simple 1x1 conv projection
+                if not hasattr(self, f'_channel_proj_{i}'):
+                    proj = nn.Conv2d(C, target_ch, 1, 1, 0).to(feat.device)
+                    setattr(self, f'_channel_proj_{i}', proj)
+                feat = getattr(self, f'_channel_proj_{i}')(feat)
+            
+            features.append(feat)
+        
+        return features
+    
+    def extract_teacher_features(self, x: torch.Tensor):
+        """
+        Extract penultimate features and logits from teacher.
+        Returns features as 1D vector (B, D) and logits (B, C).
+        """
+        with torch.no_grad():
+            if hasattr(self.teacher, 'forward_features'):
+                features = self.teacher.forward_features(x)
+                
+                if len(features.shape) == 4:  # CNN
+                    features = F.adaptive_avg_pool2d(features, 1).flatten(1)
+                elif len(features.shape) == 3:  # ViT
+                    features = features[:, 0]
+                
+                if hasattr(self.teacher, 'head'):
+                    logits = self.teacher.head(features)
+                elif hasattr(self.teacher, 'classifier'):
+                    logits = self.teacher.classifier(features)
+                elif hasattr(self.teacher, 'fc'):
+                    logits = self.teacher.fc(features)
+                else:
+                    logits = self.teacher(x)
+            elif hasattr(self.teacher, 'features') and hasattr(self.teacher, 'classifier'):
+                # torchvision DenseNet
+                features = self.teacher.features(x)
+                features = F.relu(features, inplace=False)
+                features = F.adaptive_avg_pool2d(features, (1, 1))
+                features = torch.flatten(features, 1)
+                logits = self.teacher.classifier(features)
+            else:
+                logits = self.teacher(x)
+                features = logits
+        
+        return features, logits
+    
+    def compute_hcd_loss(
+        self,
+        student_logits: torch.Tensor,
+        student_stage_features: List[torch.Tensor],
+        teacher_features: torch.Tensor,
+        teacher_logits: torch.Tensor,
+        labels: torch.Tensor
+    ):
+        """
+        Compute HCD loss matching official implementation.
+        
+        loss_total = loss_gt + loss_hcd + loss_orthogonality
+        
+        Where:
+            loss_gt = gt_loss_weight * (CE(student, labels) + sum(CE(fused_sublogits, labels)))
+            loss_hcd = hcd_loss_weight * sum(KL(student || fused_sublogits))
+            loss_orthogonality = diversity * sum(orthogonality_loss(masked_sublogits))
+        """
+        log_dict = {}
+        B = student_logits.size(0)
+        
+        hcd_losses = []
+        entropy_losses = []
+        orthogonality_losses = []
+        
+        # Process each stage
+        for stage_idx, (stage_feat, projector, cfm) in enumerate(
+            zip(student_stage_features, self.stage_projectors, self.cfm)
+        ):
+            # 1) Project student stage features to vector
+            feat_student_final = projector(stage_feat)  # (B, D)
+            
+            # 2) Concatenate with teacher features
+            feat_cat = torch.cat([feat_student_final, teacher_features], dim=1)
+            
+            # 3) CFM: produce k * num_classes logits
+            logits_student_head = cfm(feat_cat)  # (B, k * C)
+            logits_student_head = logits_student_head.view(B, self.k, self.num_classes)
+            
+            # 4) Fuse with teacher logits (SDD rectification)
+            logits_student_head = (
+                self.lambda_student * logits_student_head + 
+                self.lambda_teacher * teacher_logits.unsqueeze(1).expand(-1, self.k, -1)
+            )
+            
+            # 5) Orthogonality loss on masked sub-logits
+            masked_logits = _hcd_remove_one_hot(logits_student_head, labels)
+            orthogonality_losses.append(_hcd_orthogonality_loss(masked_logits, self.ortho_threshold))
+            
+            # 6) KL loss: student logits vs fused sub-logits
+            local_kl = torch.tensor(0.0, device=student_logits.device)
+            cross_entropy = torch.tensor(0.0, device=student_logits.device)
+            
+            for i in range(self.k):
+                # CE on fused sub-logits
+                cross_entropy = cross_entropy + self.ce_loss(logits_student_head[:, i, :], labels)
+                
+                # KL: student learns from fused sub-logits
+                local_kl = local_kl + F.kl_div(
+                    F.log_softmax(student_logits / self.temperature, dim=1),
+                    F.softmax(logits_student_head[:, i, :] / self.temperature, dim=1),
+                    reduction='batchmean'
+                ) * (self.temperature ** 2)
+            
+            cross_entropy = cross_entropy / self.k
+            local_kl = local_kl / self.k
+            
+            hcd_losses.append(local_kl)
+            entropy_losses.append(cross_entropy)
+        
+        # Combine losses matching official
+        loss_hcd = self.hcd_loss_weight * sum(hcd_losses)
+        loss_gt = self.gt_loss_weight * self.ce_loss(student_logits, labels) + \
+                  self.gt_loss_weight * sum(entropy_losses)
+        loss_orthogonality = self.diversity * sum(orthogonality_losses)
+        
+        loss_total = loss_gt + loss_hcd + loss_orthogonality
+        
+        # Logging
+        log_dict['loss_gt'] = loss_gt
+        log_dict['loss_hcd'] = loss_hcd
+        log_dict['loss_orthogonality'] = loss_orthogonality
+        log_dict['loss_total'] = loss_total
+        
+        return loss_total, log_dict
+    
+    def training_step(self, batch, batch_idx):
+        """Training step matching official HCD."""
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+        teacher_images = batch['teacher_input_0'].to(self.device)
+        
+        # Student forward
+        student_logits = self.student(student_images)
+        student_stage_features = self.extract_student_stage_features(student_images)
+        
+        # Teacher features/logits
+        teacher_features, teacher_logits = self.extract_teacher_features(teacher_images)
+        
+        # HCD loss
+        loss_total, log_dict = self.compute_hcd_loss(
+            student_logits=student_logits,
+            student_stage_features=student_stage_features,
+            teacher_features=teacher_features,
+            teacher_logits=teacher_logits,
+            labels=labels
+        )
+        
+        self.log_dict({
+            'train/loss_gt': log_dict['loss_gt'],
+            'train/loss_hcd': log_dict['loss_hcd'],
+            'train/loss_orth': log_dict['loss_orthogonality'],
+            'train/loss_total': log_dict['loss_total'],
+        }, on_epoch=True, prog_bar=True)
+        
+        return loss_total
+    
+    def shared_eval_step(self, batch, stage: str):
+        """Shared evaluation step for validation and test."""
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+        student_logits = self.student(student_images)
+        
+        loss = self.ce_loss(student_logits, labels)
+        
+        preds = student_logits.argmax(dim=1)
+        acc = (preds == labels).float().mean()
+        
+        if stage == 'val':
+            self.val_auroc(student_logits, labels)
+            self.log('val/auroc', self.val_auroc, on_epoch=True, prog_bar=True)
+        elif stage == 'test':
+            self.test_auroc(student_logits, labels)
+            self.log('test/auroc', self.test_auroc, on_epoch=True, prog_bar=True)
+        
+        self.log(f'{stage}/accuracy', acc, on_epoch=True, prog_bar=True)
+        self.log(f'{stage}/loss_total', loss, on_epoch=True, prog_bar=True)
+        
+        return acc
+    
+    def validation_step(self, batch, batch_idx):
+        """Validation step."""
+        return self.shared_eval_step(batch, 'val')
+    
+    def test_step(self, batch, batch_idx):
+        """Test step."""
+        return self.shared_eval_step(batch, 'test')
+
+
 class BaselineStudentModule(pl.LightningModule):
     """
     Baseline Student Module - Training from scratch without KD.
