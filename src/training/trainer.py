@@ -237,9 +237,10 @@ def create_kd_module_from_config(
         kd_module = HCDKDLitModule(
             **common_params,
             hcd_loss_weight=kd_config.get('hcd_loss_weight', 6.0),
+            kd_loss_weight=kd_config.get('kd_loss_weight', 1.0),
             gt_loss_weight=kd_config.get('gt_loss_weight', 1.0),
             diversity=kd_config.get('diversity', 1.0),
-            student_channels=kd_config.get('student_channels', [24, 32, 64, 1280]),
+            student_channels=kd_config.get('student_channels', [24, 32, 96, 1280]),
             student_final_dim=kd_config.get('student_final_dim', 1280),
             teacher_feature_dim=kd_config.get('teacher_feature_dim', 768),
             embed_dim=kd_config.get('embed_dim', 256),
@@ -247,6 +248,7 @@ def create_kd_module_from_config(
             ortho_threshold=kd_config.get('ortho_threshold', 0.5),
             lambda_student=kd_config.get('lambda_student', 1.0),
             lambda_teacher=kd_config.get('lambda_teacher', 1.0),
+            label_smoothing=kd_config.get('label_smoothing', 0.1),
         )
     
     else:

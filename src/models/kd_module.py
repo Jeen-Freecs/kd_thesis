@@ -1585,6 +1585,7 @@ class HCDKDLitModule(pl.LightningModule):
         temperature: float = 1.0,            # ofa_temperature in official
         learning_rate: float = 0.05,         # SGD lr in official
         hcd_loss_weight: float = 6.0,        # Weight for HCD KL loss
+        kd_loss_weight: float = 1.0,         # Weight for standard KD loss (student vs teacher)
         gt_loss_weight: float = 1.0,         # Weight for CE losses
         diversity: float = 1.0,              # Weight for orthogonality loss
         num_classes: int = 100,
@@ -1596,6 +1597,7 @@ class HCDKDLitModule(pl.LightningModule):
         ortho_threshold: float = 0.5,        # Orthogonality threshold
         lambda_student: float = 1.0,         # Weight for sub-logits in fusion
         lambda_teacher: float = 1.0,         # Weight for teacher logits in fusion
+        label_smoothing: float = 0.1,        # Label smoothing (official uses 0.1)
     ):
         """
         Initialize HCD module matching official implementation.
@@ -1625,6 +1627,7 @@ class HCDKDLitModule(pl.LightningModule):
         self.temperature = temperature
         self.learning_rate = learning_rate
         self.hcd_loss_weight = hcd_loss_weight
+        self.kd_loss_weight = kd_loss_weight
         self.gt_loss_weight = gt_loss_weight
         self.diversity = diversity
         self.num_classes = num_classes
@@ -1635,9 +1638,10 @@ class HCDKDLitModule(pl.LightningModule):
         self.lambda_teacher = lambda_teacher
         self.teacher_feature_dim = teacher_feature_dim
         self.student_final_dim = student_final_dim
+        self.label_smoothing = label_smoothing
         
         if student_channels is None:
-            student_channels = [24, 32, 64, 1280]
+            student_channels = [24, 32, 96, 1280]  # MobileNetV2 real stage channels
         self.student_channels = student_channels
         self.num_stages = len(student_channels)
         
@@ -1690,18 +1694,11 @@ class HCDKDLitModule(pl.LightningModule):
             for _ in student_channels
         ])
         
-        # Channel projectors for multi-scale feature extraction
-        # Register them properly so they're in the optimizer
-        self.channel_projs = nn.ModuleList([
-            nn.Conv2d(student_final_dim, ch, 1, 1, 0) if ch != student_final_dim else nn.Identity()
-            for ch in student_channels
-        ])
-        
-        # Initialize weights
+        # Initialize weights for projectors and CFM only
         self._init_weights()
         
-        # Loss functions
-        self.ce_loss = CrossEntropyLoss()
+        # Loss functions (official uses label smoothing=0.1)
+        self.ce_loss = CrossEntropyLoss(label_smoothing=self.label_smoothing)
         
         # Metrics
         self.val_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
@@ -1746,8 +1743,7 @@ class HCDKDLitModule(pl.LightningModule):
         params = (
             list(self.student.parameters()) +
             list(self.stage_projectors.parameters()) +
-            list(self.cfm.parameters()) +
-            list(self.channel_projs.parameters())
+            list(self.cfm.parameters())
         )
         
         # Official uses SGD with momentum
@@ -1767,49 +1763,81 @@ class HCDKDLitModule(pl.LightningModule):
         
         return [optimizer], [scheduler]
     
-    def extract_student_stage_features(self, x: torch.Tensor) -> List[torch.Tensor]:
+    def _student_forward_with_features(self, x: torch.Tensor):
         """
-        Extract features from multiple stages of the student CNN.
-        For simplicity, we use the final feature map and create multi-scale versions.
+        Run student forward pass, capturing REAL intermediate features at each stage.
+        
+        Unlike the old approach that faked multi-scale features by pooling the final
+        feature map, this extracts actual features from different network depths,
+        matching the official HCD implementation.
+        
+        Returns:
+            stage_features: List of feature tensors from each student stage
+            logits: Student output logits
         """
-        if hasattr(self.student, 'forward_features'):
-            final_feat = self.student.forward_features(x)
-        else:
-            logits = self.student(x)
-            final_feat = logits.unsqueeze(-1).unsqueeze(-1)
-        
-        if len(final_feat.shape) == 2:  # (B, C)
-            final_feat = final_feat.unsqueeze(-1).unsqueeze(-1)
-        elif len(final_feat.shape) == 3:  # Transformer: (B, N, D)
-            final_feat = final_feat.transpose(1, 2).unsqueeze(-1)
-        
-        B, C, H, W = final_feat.shape
         features = []
         
-        # Create multi-scale features at different spatial sizes
-        # Stage 1: largest spatial, Stage 4: 1x1
-        for i in range(self.num_stages):
-            if i == 0:
-                spatial_size = max(H, 8)
-            elif i == 1:
-                spatial_size = max(H // 2, 4)
-            elif i == 2:
-                spatial_size = max(H // 4, 2)
-            else:
-                spatial_size = 1
+        if hasattr(self.student, 'blocks'):
+            # ---- timm EfficientNet / MobileNetV2 ----
+            # MobileNetV2 stage boundaries (flattened block indices):
+            #   Stage 1: idx 2  -> (24,  H/4,  W/4)
+            #   Stage 2: idx 5  -> (32,  H/8,  W/8)
+            #   Stage 3: idx 12 -> (96,  H/16, W/16)
+            #   Stage 4: after conv_head+bn2 -> (1280, H/32, W/32)
+            target_indices = {2, 5, 12}
             
-            # Resize to target spatial size
-            if spatial_size != H or spatial_size != W:
-                feat = F.adaptive_avg_pool2d(final_feat, (spatial_size, spatial_size))
-            else:
-                feat = final_feat
+            x = self.student.conv_stem(x)
+            x = self.student.bn1(x)
+            if hasattr(self.student, 'act1'):
+                x = self.student.act1(x)
             
-            # Project to expected channel dimension using registered modules
-            feat = self.channel_projs[i](feat)
+            block_idx = 0
+            for group in self.student.blocks:
+                for block in group:
+                    x = block(x)
+                    if block_idx in target_indices:
+                        features.append(x)
+                    block_idx += 1
             
-            features.append(feat)
+            # Stage 4: after conv_head + bn2 (matching official)
+            x = self.student.conv_head(x)
+            x = self.student.bn2(x)
+            features.append(x)
+            
+            # Apply remaining activation before head (if exists)
+            if hasattr(self.student, 'act2'):
+                x = self.student.act2(x)
+            
+            # Get logits through model's own head
+            logits = self.student.forward_head(x)
+            
+            return features, logits
         
-        return features
+        elif hasattr(self.student, 'layer1'):
+            # ---- timm ResNet ----
+            x = self.student.conv1(x)
+            x = self.student.bn1(x)
+            x = self.student.act1(x)
+            if hasattr(self.student, 'maxpool'):
+                x = self.student.maxpool(x)
+            
+            x = self.student.layer1(x)
+            features.append(x)
+            x = self.student.layer2(x)
+            features.append(x)
+            x = self.student.layer3(x)
+            features.append(x)
+            x = self.student.layer4(x)
+            features.append(x)
+            
+            logits = self.student.forward_head(x)
+            return features, logits
+        
+        else:
+            raise NotImplementedError(
+                f"Cannot extract intermediate features from {type(self.student).__name__}. "
+                f"Supported: EfficientNet/MobileNetV2 (timm), ResNet."
+            )
     
     def extract_teacher_features(self, x: torch.Tensor):
         """
@@ -1855,28 +1883,27 @@ class HCDKDLitModule(pl.LightningModule):
         labels: torch.Tensor
     ):
         """
-        Compute HCD loss.
+        Compute HCD loss matching the official implementation.
         
-        loss_total = loss_gt + loss_hcd + loss_orthogonality
+        loss_total = loss_gt + loss_kd + loss_hcd + loss_orthogonality
         
-        Key fixes vs naive implementation:
-        - Sub-logits are DETACHED when used as KL targets to prevent
-          conflicting gradient signals (CE pushes toward labels,
-          KL would push away from student otherwise)
-        - Losses are AVERAGED across stages (not summed) to prevent
-          loss scale explosion with multiple stages
-        - Temperature scaling softens distributions for better KD signal
+        Matches official HCD (https://github.com/yema-web/HCD):
+        - loss_kd: standard KL(student || teacher) — direct distillation signal
+        - loss_hcd: KL(student || sub-logits) — complementary distillation
+        - loss_gt: CE(student, labels) + CE(sub-logits, labels)
+        - loss_orthogonality: diversity constraint on sub-logits
+        - Sub-logits are NOT detached (official trains CFM via both CE and KL)
+        - Losses are SUMMED across stages (not averaged) — official behavior
+        - Temperature used as-is from config (official default: 1.0)
         """
         log_dict = {}
         B = student_logits.size(0)
-        num_stages = len(student_stage_features)
+        
+        T = self.temperature
         
         hcd_losses = []
         entropy_losses = []
         orthogonality_losses = []
-        
-        # Use effective temperature (higher = softer distributions = better KD)
-        T = max(self.temperature, 3.0)
         
         # Process each stage
         for stage_idx, (stage_feat, projector, cfm) in enumerate(
@@ -1892,7 +1919,7 @@ class HCDKDLitModule(pl.LightningModule):
             logits_student_head = cfm(feat_cat)  # (B, k * C)
             logits_student_head = logits_student_head.view(B, self.k, self.num_classes)
             
-            # 4) Fuse with teacher logits (SDD rectification)
+            # 4) Fuse with teacher logits (SDD rectification, Eq. 6)
             logits_student_head = (
                 self.lambda_student * logits_student_head + 
                 self.lambda_teacher * teacher_logits.unsqueeze(1).expand(-1, self.k, -1)
@@ -1909,30 +1936,36 @@ class HCDKDLitModule(pl.LightningModule):
             cross_entropy = cross_entropy / self.k
             entropy_losses.append(cross_entropy)
             
-            # 7) KL loss: student learns from DETACHED sub-logits
-            # CRITICAL: detach sub_logits so KL only updates the student,
-            # not the CFM (which is trained by CE above)
+            # 7) HCD KL loss: student learns from sub-logits (NOT detached — official)
+            # In the official code, gradients flow through both student AND CFM.
             local_kl = torch.tensor(0.0, device=student_logits.device)
-            sub_logits_detached = logits_student_head.detach()
             for i in range(self.k):
                 local_kl = local_kl + F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
-                    F.softmax(sub_logits_detached[:, i, :] / T, dim=1),
-                    reduction='batchmean'
-                ) * (T ** 2)
+                    F.softmax(logits_student_head[:, i, :] / T, dim=1),
+                    reduction='sum'
+                ) * (T ** 2) / B
             local_kl = local_kl / self.k
             hcd_losses.append(local_kl)
         
-        # AVERAGE across stages (not sum) to keep loss scale reasonable
-        loss_hcd = self.hcd_loss_weight * sum(hcd_losses) / num_stages
+        # SUM across stages (official behavior — not averaged)
+        loss_hcd = self.hcd_loss_weight * sum(hcd_losses)
         loss_gt = self.gt_loss_weight * self.ce_loss(student_logits, labels) + \
-                  self.gt_loss_weight * sum(entropy_losses) / num_stages
-        loss_orthogonality = self.diversity * sum(orthogonality_losses) / num_stages
+                  self.gt_loss_weight * sum(entropy_losses)
+        loss_orthogonality = self.diversity * sum(orthogonality_losses)
         
-        loss_total = loss_gt + loss_hcd + loss_orthogonality
+        # Standard KD loss: direct KL(student || teacher) — MISSING before this fix
+        log_pred_student = F.log_softmax(student_logits / T, dim=1)
+        pred_teacher = F.softmax(teacher_logits / T, dim=1)
+        loss_kd = self.kd_loss_weight * F.kl_div(
+            log_pred_student, pred_teacher, reduction='batchmean'
+        ) * (T ** 2)
+        
+        loss_total = loss_gt + loss_kd + loss_hcd + loss_orthogonality
         
         # Logging
         log_dict['loss_gt'] = loss_gt
+        log_dict['loss_kd'] = loss_kd
         log_dict['loss_hcd'] = loss_hcd
         log_dict['loss_orthogonality'] = loss_orthogonality
         log_dict['loss_total'] = loss_total
@@ -1940,19 +1973,18 @@ class HCDKDLitModule(pl.LightningModule):
         return loss_total, log_dict
     
     def training_step(self, batch, batch_idx):
-        """Training step matching official HCD."""
+        """Training step matching official HCD — single forward pass."""
         labels = batch['label'].to(self.device)
         student_images = batch['student_input'].to(self.device)
         teacher_images = batch['teacher_input_0'].to(self.device)
         
-        # Single student forward: get both logits and features from ONE pass
-        student_logits = self.student(student_images)
-        student_stage_features = self.extract_student_stage_features(student_images)
+        # Single student forward: extract REAL intermediate features + logits in ONE pass
+        student_stage_features, student_logits = self._student_forward_with_features(student_images)
         
         # Teacher features/logits (frozen)
         teacher_features, teacher_logits = self.extract_teacher_features(teacher_images)
         
-        # HCD loss
+        # HCD loss (now includes loss_kd, matching official)
         loss_total, log_dict = self.compute_hcd_loss(
             student_logits=student_logits,
             student_stage_features=student_stage_features,
@@ -1963,6 +1995,7 @@ class HCDKDLitModule(pl.LightningModule):
         
         self.log_dict({
             'train/loss_gt': log_dict['loss_gt'],
+            'train/loss_kd': log_dict['loss_kd'],
             'train/loss_hcd': log_dict['loss_hcd'],
             'train/loss_orth': log_dict['loss_orthogonality'],
             'train/loss_total': log_dict['loss_total'],

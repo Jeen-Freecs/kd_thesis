@@ -27,15 +27,17 @@ kd:
   temperature: 1.0             # ofa_temperature in official
   learning_rate: 0.05          # SGD lr in official
   num_classes: 100
-  # HCD-specific parameters
-  hcd_loss_weight: 6.0         # Weight for HCD KL loss
+  # HCD-specific parameters (matching official paper Table 7)
+  hcd_loss_weight: 6.0         # λ: Weight for HCD KL loss
+  kd_loss_weight: 1.0          # β: Weight for standard KD loss (student vs teacher)
   gt_loss_weight: 1.0          # Weight for CE losses
-  diversity: 1.0               # Weight for orthogonality loss
+  diversity: 1.0               # ω: Weight for orthogonality loss
+  label_smoothing: 0.1         # Label smoothing (official uses 0.1)
   k: 4                         # Number of sub-logits (hardcoded in official)
   ortho_threshold: 0.5         # Orthogonality threshold
   lambda_student: 1.0          # Sub-logit weight in fusion
   lambda_teacher: 1.0          # Teacher logit weight in fusion
-  student_channels: [24, 32, 64, 1280]
+  student_channels: [24, 32, 96, 1280]  # MobileNetV2 real intermediate channels
   student_final_dim: 1280
   teacher_feature_dim: 768     # ViT-Base feature dim
   embed_dim: 1280              # max(student_final_dim, teacher_feature_dim)
