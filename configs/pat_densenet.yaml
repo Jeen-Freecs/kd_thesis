@@ -6,7 +6,7 @@
 # Data configuration
 data:
   data_dir: "./data"
-  batch_size: 128
+  batch_size: 64             # Reduced from 128 to stay safe on 24GB GPU
   num_workers: 4
   val_size: 5000
   seed: 42
@@ -32,20 +32,20 @@ kd:
   alpha: 1.0                  # Weight for L_KL (logit distillation)
   beta: 1.0                   # Weight for L_FD (feature distillation)
   gamma: 0.1                  # Weight for L_Reg (regularization)
-  student_channels: [24, 32, 64, 1280]  # MobileNetV2 stage channels
+  student_channels: [24, 32, 96, 1280]  # MobileNetV2 actual stage channels (block2=24, block5=32, block12=96, conv_head=1280)
   teacher_feature_dim: 384    # DenseNet-121 CIFAR feature dimension (growth_rate=12, block_config=(6,12,24,16))
   embed_dim: 256              # RAA embedding dimension
   num_heads: 8                # RAA attention heads
 
 # Training configuration
 training:
-  max_epochs: 150
-  patience: 30
+  max_epochs: 300
+  patience: 50
   log_every_n_steps: 50
 
 # Weights & Biases configuration
 wandb:
   project: "KD-CIFAR100"
-  name: "PAT-DenseNet121"
+  name: "PAT-DenseNet121-v2"
   log_model: "all"
   resume: "allow"

@@ -940,6 +940,9 @@ class RegionAwareAttention(nn.Module):
         """
         Convert feature map to patches (like ViT tokens).
         
+        Pools to a fixed small spatial size first to prevent attention explosion
+        when using real intermediate features (early stages can be 56×56).
+        
         Args:
             feature_map: (B, C, H, W)
             
@@ -948,8 +951,13 @@ class RegionAwareAttention(nn.Module):
         """
         B, C, H, W = feature_map.shape
         
-        # Use adaptive pooling to get consistent number of patches
-        target_size = max(H // self.patch_size, 1)
+        # Cap spatial size to avoid huge attention matrices
+        # Without this, real features from early stages (56×56) create 784+ patches
+        # per stage, leading to 1000+ total patches and O(n²) attention OOM.
+        max_spatial = 7  # Pool to at most 7×7 before patchifying
+        effective_h = min(H, max_spatial)
+        
+        target_size = max(effective_h // self.patch_size, 1)
         pooled = F.adaptive_avg_pool2d(feature_map, (target_size, target_size))
         
         # Flatten spatial dimensions
@@ -974,8 +982,15 @@ class RegionAwareAttention(nn.Module):
         
         # Process each stage
         for i, (feat, projector) in enumerate(zip(stage_features, self.stage_projectors)):
-            # Project to shared dimension
-            projected = projector(feat)  # (B, embed_dim, H, W)
+            # Pre-pool large feature maps BEFORE projection to save memory.
+            # Without this, the 1x1 conv projector creates huge intermediate
+            # activations (e.g. 256×56×56 for stage 0) that are immediately
+            # thrown away by patchify pooling — 69× more memory for no benefit.
+            if feat.shape[2] > 7 or feat.shape[3] > 7:
+                feat = F.adaptive_avg_pool2d(feat, 7)
+            
+            # Project to shared dimension (now operates on ≤7×7 maps)
+            projected = projector(feat)  # (B, embed_dim, ≤7, ≤7)
             
             # Patchify
             patches = self.patchify(projected)  # (B, num_patches, embed_dim)
@@ -1140,7 +1155,7 @@ class PATKDLitModule(pl.LightningModule):
         beta: float = 1.0,        # Weight for L_FD (feature distillation)
         gamma: float = 0.1,       # Weight for L_Reg (regularization)
         num_classes: int = 100,
-        student_channels: List[int] = None,  # [24, 32, 64, 1280] for MobileNetV2
+        student_channels: List[int] = None,  # [24, 32, 96, 1280] for MobileNetV2
         teacher_feature_dim: int = 768,      # 768 for ViT, 2048 for ResNet
         embed_dim: int = 256,
         num_heads: int = 8,
@@ -1176,8 +1191,9 @@ class PATKDLitModule(pl.LightningModule):
         self.teacher_feature_dim = teacher_feature_dim
         
         # Default student channels for MobileNetV2
+        # Actual channels: block2=24, block5=32, block12=96, conv_head=1280
         if student_channels is None:
-            student_channels = [24, 32, 64, 1280]
+            student_channels = [24, 32, 96, 1280]
         self.student_channels = student_channels
         
         # Student model
@@ -1192,18 +1208,6 @@ class PATKDLitModule(pl.LightningModule):
         self.teacher.eval()
         for param in self.teacher.parameters():
             param.requires_grad = False
-        
-        # Channel adapters to convert student final features to expected stage channels
-        # MobileNetV2 final feature dim is 1280, we need to adapt to [24, 32, 64, 1280]
-        self.student_final_dim = 1280  # MobileNetV2 default
-        self.channel_adapters = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(self.student_final_dim, ch, kernel_size=1),
-                nn.BatchNorm2d(ch),
-                nn.ReLU(inplace=True)
-            ) if ch != self.student_final_dim else nn.Identity()
-            for ch in student_channels
-        ])
         
         # RAA: Region-Aware Attention for student
         self.raa = RegionAwareAttention(
@@ -1239,11 +1243,15 @@ class PATKDLitModule(pl.LightningModule):
         return self.student(x)
     
     def configure_optimizers(self):
-        """Configure optimizer and learning rate scheduler."""
-        # Trainable: student + channel_adapters + RAA + AFP + projection
+        """Configure optimizer with warmup + cosine annealing.
+        
+        Warmup prevents gradient explosion at the start of training,
+        which is critical when feature loss gradients flow through
+        the student's early layers via real intermediate features.
+        """
+        # Trainable: student + RAA + AFP + projection (no channel_adapters needed)
         params = (
             list(self.student.parameters()) +
-            list(self.channel_adapters.parameters()) +
             list(self.raa.parameters()) +
             list(self.afp.parameters()) +
             list(self.student_proj.parameters())
@@ -1255,64 +1263,103 @@ class PATKDLitModule(pl.LightningModule):
             weight_decay=1e-4
         )
         
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        # Linear warmup for 5 epochs, then cosine decay
+        warmup_epochs = 5
+        max_epochs = 300
+        
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer,
-            T_max=100,
-            eta_min=1e-6
+            start_factor=1e-4 / max(self.learning_rate, 1e-8),
+            end_factor=1.0,
+            total_iters=warmup_epochs,
+        )
+        cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=max_epochs - warmup_epochs,
+            eta_min=1e-6,
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, cosine_scheduler],
+            milestones=[warmup_epochs],
         )
         
         return [optimizer], [scheduler]
     
-    def extract_student_stage_features(self, x: torch.Tensor) -> List[torch.Tensor]:
+    def _student_forward_with_features(self, x: torch.Tensor):
         """
-        Extract features from multiple stages of the student CNN.
+        Run student forward pass, capturing REAL intermediate features at each stage.
         
-        For MobileNetV2 and similar CNNs, we extract features at different spatial
-        resolutions and use channel adapters to match expected dimensions.
+        Extracts actual features from different network depths instead of faking
+        multi-scale features by pooling the final feature map.
         
-        Args:
-            x: Input images (B, 3, H, W)
-            
         Returns:
-            List of feature maps from different stages, each with correct channels
+            stage_features: List of feature tensors from each student stage
+            logits: Student output logits
         """
-        # Get final features from student
-        if hasattr(self.student, 'forward_features'):
-            final_feat = self.student.forward_features(x)
-        else:
-            # Fallback: use full forward and reshape
-            logits = self.student(x)
-            final_feat = logits.unsqueeze(-1).unsqueeze(-1)
-        
-        # Handle different feature shapes
-        if len(final_feat.shape) == 3:  # Transformer: (B, N, D)
-            final_feat = final_feat.transpose(1, 2).unsqueeze(-1)  # (B, D, N, 1)
-        
-        B, C, H, W = final_feat.shape
-        
-        # Create multi-scale features at different resolutions
-        # Use the channel adapters to project to expected dimensions
         features = []
         
-        for i, (target_ch, adapter) in enumerate(zip(self.student_channels, self.channel_adapters)):
-            # Different spatial sizes for different "stages"
-            if i == 0:
-                spatial_size = max(H, 4)
-            elif i == 1:
-                spatial_size = max(H // 2, 2)
-            elif i == 2:
-                spatial_size = max(H // 4, 1)
-            else:
-                spatial_size = 1
+        if hasattr(self.student, 'blocks'):
+            # ---- timm EfficientNet / MobileNetV2 ----
+            # MobileNetV2 stage boundaries (flattened block indices):
+            #   Stage 1: idx 2  -> (24,  H/4,  W/4)
+            #   Stage 2: idx 5  -> (32,  H/8,  W/8)
+            #   Stage 3: idx 12 -> (96,  H/16, W/16)
+            #   Stage 4: after conv_head+bn2 -> (1280, H/32, W/32)
+            target_indices = {2, 5, 12}
             
-            # Pool to target spatial size
-            pooled = F.adaptive_avg_pool2d(final_feat, (spatial_size, spatial_size))
+            x = self.student.conv_stem(x)
+            x = self.student.bn1(x)
+            if hasattr(self.student, 'act1'):
+                x = self.student.act1(x)
             
-            # Adapt channels to expected dimension
-            adapted = adapter(pooled)  # (B, target_ch, spatial_size, spatial_size)
-            features.append(adapted)
+            block_idx = 0
+            for group in self.student.blocks:
+                for block in group:
+                    x = block(x)
+                    if block_idx in target_indices:
+                        features.append(x)
+                    block_idx += 1
+            
+            # Stage 4: after conv_head + bn2
+            x = self.student.conv_head(x)
+            x = self.student.bn2(x)
+            features.append(x)
+            
+            # Apply remaining activation before head
+            if hasattr(self.student, 'act2'):
+                x = self.student.act2(x)
+            
+            # Get logits through model's own head
+            logits = self.student.forward_head(x)
+            
+            return features, logits
         
-        return features
+        elif hasattr(self.student, 'layer1'):
+            # ---- timm ResNet ----
+            x = self.student.conv1(x)
+            x = self.student.bn1(x)
+            x = self.student.act1(x)
+            if hasattr(self.student, 'maxpool'):
+                x = self.student.maxpool(x)
+            
+            x = self.student.layer1(x)
+            features.append(x)
+            x = self.student.layer2(x)
+            features.append(x)
+            x = self.student.layer3(x)
+            features.append(x)
+            x = self.student.layer4(x)
+            features.append(x)
+            
+            logits = self.student.forward_head(x)
+            return features, logits
+        
+        else:
+            raise NotImplementedError(
+                f"Cannot extract intermediate features from {type(self.student).__name__}. "
+                f"Supported: EfficientNet/MobileNetV2 (timm), ResNet."
+            )
     
     def extract_teacher_features(self, x: torch.Tensor):
         """
@@ -1426,25 +1473,33 @@ class PATKDLitModule(pl.LightningModule):
         return loss_total, log_dict
     
     def training_step(self, batch, batch_idx):
-        """Training step."""
+        """Training step — single student forward pass for both features and logits."""
         labels = batch['label'].to(self.device)
         student_images = batch['student_input'].to(self.device)
         teacher_images = batch['teacher_input_0'].to(self.device)
         
-        # 1. Extract student multi-stage features
-        student_stage_features = self.extract_student_stage_features(student_images)
+        # 1. Single student forward: extract REAL intermediate features + logits in ONE pass
+        student_stage_features, student_logits = self._student_forward_with_features(student_images)
         
-        # 2. Apply RAA to get aligned student representation
-        student_aligned = self.raa(student_stage_features)  # (B, embed_dim)
+        # 2. Detach early-stage features to prevent feature loss gradients from
+        #    destabilizing early student layers. Only later stages (which have
+        #    higher-level representations) pass gradients through the RAA path.
+        #    Early layers still get gradients from CE and KL losses via logits.
+        #    stages: [block2(24ch), block5(32ch), block12(96ch), conv_head(1280ch)]
+        #    Detach stage 0 and 1 (low-level edges/textures), keep 2 and 3 (semantics)
+        stable_features = [
+            feat.detach() if i < 2 else feat
+            for i, feat in enumerate(student_stage_features)
+        ]
         
-        # 3. Get student logits
-        student_logits = self.student(student_images)
+        # 3. Apply RAA to get aligned student representation
+        student_aligned = self.raa(stable_features)  # (B, embed_dim)
         
-        # 4. Extract teacher features (frozen)
+        # 3. Extract teacher features (frozen)
         teacher_features, teacher_logits = self.extract_teacher_features(teacher_images)
         frozen_teacher_features = teacher_features.clone()
         
-        # 5. Apply AFP to adapt teacher features
+        # 4. Apply AFP to adapt teacher features
         student_proj_for_feedback = self.student_proj(student_aligned)
         teacher_adapted = self.afp(
             teacher_features,
@@ -1452,7 +1507,7 @@ class PATKDLitModule(pl.LightningModule):
             frozen_teacher_features
         )
         
-        # 6. Compute PAT loss
+        # 5. Compute PAT loss
         loss_total, log_dict = self.compute_pat_loss(
             student_logits=student_logits,
             student_aligned=student_aligned,
@@ -2032,6 +2087,405 @@ class HCDKDLitModule(pl.LightningModule):
     
     def test_step(self, batch, batch_idx):
         """Test step."""
+        return self.shared_eval_step(batch, 'test')
+
+
+###############################################################################
+# OFA-KD: One-for-All Knowledge Distillation (NeurIPS 2023)
+# Reference: https://proceedings.neurips.cc/paper_files/paper/2023/file/
+#            fb8e5f198c7a5dcd48860354e38c0edc-Paper-Conference.pdf
+# Official implementation: https://github.com/Hao840/OFAKD
+###############################################################################
+
+
+def _ofa_loss(
+    logits_student: torch.Tensor,
+    logits_teacher: torch.Tensor,
+    target_mask: torch.Tensor,
+    eps: float,
+    temperature: float = 1.0
+) -> torch.Tensor:
+    """
+    OFA adaptive target enhancement loss — numerically stable version.
+    
+    Uses log_softmax for student (avoids log(0) in fp16) and computes
+    teacher softmax in float32 to prevent exact zeros before exponentiation.
+    
+    Args:
+        logits_student: Student logits (B, C)
+        logits_teacher: Teacher logits (B, C)
+        target_mask: One-hot ground truth (B, C)
+        eps: Enhancement exponent (1.0 for CIFAR-100, 1.5 for ImageNet)
+        temperature: Softmax temperature
+        
+    Returns:
+        Scalar loss
+    """
+    # Student: use log_softmax for numerical stability (avoids log(0))
+    log_pred_student = F.log_softmax(logits_student / temperature, dim=1)
+    
+    # Teacher: compute in float32 to avoid exact zeros in fp16
+    logits_t_f32 = logits_teacher.float() / temperature
+    pred_teacher = F.softmax(logits_t_f32, dim=1)
+    
+    # Target enhancement (Eq. in paper)
+    target_mask_f32 = target_mask.float()
+    prod = (pred_teacher + target_mask_f32) ** eps
+    weights = (prod - target_mask_f32).to(log_pred_student.dtype)
+    
+    loss = torch.sum(-weights * log_pred_student, dim=-1)
+    return loss.mean()
+
+
+class _SepConv(nn.Module):
+    """Separable convolution block matching official OFA-KD implementation."""
+    
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.layers = nn.Sequential(
+            # Depthwise
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=2,
+                      padding=1, groups=in_channels, bias=False),
+            # Pointwise
+            nn.Conv2d(in_channels, in_channels, kernel_size=1,
+                      padding=0, bias=False),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=False),
+            # Depthwise
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1,
+                      padding=1, groups=in_channels, bias=False),
+            # Pointwise
+            nn.Conv2d(in_channels, out_channels, kernel_size=1,
+                      padding=0, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=False),
+        )
+    
+    def forward(self, x):
+        return self.layers(x)
+
+
+class OFAKDLitModule(pl.LightningModule):
+    """
+    OFA-KD: One-for-All Knowledge Distillation (NeurIPS 2023).
+    
+    Bridges the gap between heterogeneous architectures by:
+    1. Projecting intermediate features into an aligned latent space
+    2. Using adaptive target enhancement (ATE) for logit distillation
+    
+    Loss: L_total = gt_loss + kd_loss + ofa_loss
+    
+    Reference: https://github.com/Hao840/OFAKD
+    """
+    
+    def __init__(
+        self,
+        teacher_models: List[nn.Module],
+        student_model: nn.Module,
+        temperature: float = 4.0,
+        learning_rate: float = 0.05,
+        num_classes: int = 100,
+        ofa_eps: float = 1.0,               # 1.0 for CIFAR-100, 1.5 for ImageNet
+        ofa_loss_weight: float = 1.0,
+        gt_loss_weight: float = 1.0,
+        kd_loss_weight: float = 1.0,
+        ofa_temperature: float = 1.0,
+        label_smoothing: float = 0.1,
+        student_channels: List[int] = None,
+        student_final_dim: int = 1280,
+        teacher_feature_dim: int = 768,
+        warmup_epochs: int = 3,
+        max_epochs: int = 300,
+    ):
+        super().__init__()
+        
+        self.save_hyperparameters(ignore=["teacher_models", "student_model"])
+        
+        self.temperature = temperature
+        self.learning_rate = learning_rate
+        self.num_classes = num_classes
+        self.ofa_eps = ofa_eps
+        self.ofa_loss_weight = ofa_loss_weight
+        self.gt_loss_weight = gt_loss_weight
+        self.kd_loss_weight = kd_loss_weight
+        self.ofa_temperature = ofa_temperature
+        self.label_smoothing = label_smoothing
+        self.teacher_feature_dim = teacher_feature_dim
+        self.student_final_dim = student_final_dim
+        self.warmup_epochs = warmup_epochs
+        self.max_epochs = max_epochs
+        
+        if student_channels is None:
+            student_channels = [24, 32, 96, 1280]
+        self.student_channels = student_channels
+        
+        # Student model
+        if student_model is None:
+            raise ValueError("A student model must be provided.")
+        self.student = student_model
+        
+        # Teacher model (frozen)
+        if not teacher_models or len(teacher_models) == 0:
+            raise ValueError("Teacher model must be provided for OFA-KD.")
+        self.teacher = teacher_models[0]
+        self.teacher.eval()
+        for param in self.teacher.parameters():
+            param.requires_grad = False
+        
+        # Per-stage projectors (matching official SepConv-based design)
+        self.projectors = nn.ModuleList()
+        for i, ch in enumerate(student_channels):
+            if i < len(student_channels) - 1:
+                down_sample_num = len(student_channels) - 1 - i
+                layers = []
+                in_ch = ch
+                for j in range(down_sample_num):
+                    if j == down_sample_num - 1:
+                        out_ch = max(self.student_final_dim, teacher_feature_dim)
+                    else:
+                        out_ch = in_ch * 2
+                    layers.append(_SepConv(in_ch, out_ch))
+                    in_ch = out_ch
+                layers.append(nn.AdaptiveAvgPool2d(1))
+                layers.append(nn.Flatten())
+                self.projectors.append(nn.Sequential(*layers))
+            else:
+                self.projectors.append(nn.Sequential(
+                    nn.Conv2d(ch, max(self.student_final_dim, teacher_feature_dim), 1, 1, 0),
+                    nn.AdaptiveAvgPool2d(1),
+                    nn.Flatten()
+                ))
+        
+        # Per-stage linear heads: projected_dim -> num_classes
+        proj_out_dim = max(self.student_final_dim, teacher_feature_dim)
+        self.ofa_heads = nn.ModuleList([
+            nn.Linear(proj_out_dim, num_classes)
+            for _ in student_channels
+        ])
+        
+        # Weight initialization matching official OFA-KD (distillers/utils.py:init_weights)
+        self._init_ofa_weights()
+        
+        # Loss functions
+        self.ce_loss = nn.CrossEntropyLoss(label_smoothing=self.label_smoothing)
+        
+        # Metrics
+        self.val_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
+        self.test_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
+    
+    def _init_ofa_weights(self):
+        """Initialize projector and head weights matching official OFA-KD.
+        
+        Official uses (distillers/utils.py:init_weights):
+        - Conv2d: kaiming_normal_, mode='fan_out', nonlinearity='relu'
+        - BatchNorm2d: weight=1, bias=0
+        - Linear: trunc_normal_(std=0.02), bias=0
+        """
+        for module in [self.projectors, self.ofa_heads]:
+            for m in module.modules():
+                if isinstance(m, nn.Conv2d):
+                    nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                elif isinstance(m, nn.BatchNorm2d):
+                    nn.init.ones_(m.weight)
+                    nn.init.zeros_(m.bias)
+                elif isinstance(m, nn.Linear):
+                    nn.init.trunc_normal_(m.weight, std=0.02)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+    
+    def forward(self, x):
+        return self.student(x)
+    
+    def configure_optimizers(self):
+        """SGD + linear warmup + cosine annealing (matching official)."""
+        params = (
+            list(self.student.parameters()) +
+            list(self.projectors.parameters()) +
+            list(self.ofa_heads.parameters())
+        )
+        
+        optimizer = torch.optim.SGD(
+            params,
+            lr=self.learning_rate,
+            momentum=0.9,
+            weight_decay=2e-3
+        )
+        
+        # Linear warmup from ~0 to lr over warmup_epochs
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=1e-4 / max(self.learning_rate, 1e-8),
+            end_factor=1.0,
+            total_iters=self.warmup_epochs,
+        )
+        
+        # Cosine annealing for the rest
+        cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=self.max_epochs - self.warmup_epochs,
+            eta_min=1e-3,
+        )
+        
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, cosine_scheduler],
+            milestones=[self.warmup_epochs],
+        )
+        
+        return [optimizer], [scheduler]
+    
+    def _student_forward_with_features(self, x: torch.Tensor):
+        """
+        Run student forward pass, capturing REAL intermediate features at each stage.
+        
+        Returns:
+            stage_features: List of feature tensors from each student stage
+            logits: Student output logits
+        """
+        features = []
+        
+        if hasattr(self.student, 'blocks'):
+            # timm EfficientNet / MobileNetV2
+            target_indices = {2, 5, 12}
+            
+            x = self.student.conv_stem(x)
+            x = self.student.bn1(x)
+            if hasattr(self.student, 'act1'):
+                x = self.student.act1(x)
+            
+            block_idx = 0
+            for group in self.student.blocks:
+                for block in group:
+                    x = block(x)
+                    if block_idx in target_indices:
+                        features.append(x)
+                    block_idx += 1
+            
+            x = self.student.conv_head(x)
+            x = self.student.bn2(x)
+            features.append(x)
+            
+            if hasattr(self.student, 'act2'):
+                x = self.student.act2(x)
+            
+            logits = self.student.forward_head(x)
+            return features, logits
+        
+        elif hasattr(self.student, 'layer1'):
+            # timm ResNet
+            x = self.student.conv1(x)
+            x = self.student.bn1(x)
+            x = self.student.act1(x)
+            if hasattr(self.student, 'maxpool'):
+                x = self.student.maxpool(x)
+            
+            x = self.student.layer1(x)
+            features.append(x)
+            x = self.student.layer2(x)
+            features.append(x)
+            x = self.student.layer3(x)
+            features.append(x)
+            x = self.student.layer4(x)
+            features.append(x)
+            
+            logits = self.student.forward_head(x)
+            return features, logits
+        
+        else:
+            raise NotImplementedError(
+                f"Cannot extract intermediate features from {type(self.student).__name__}. "
+                f"Supported: EfficientNet/MobileNetV2 (timm), ResNet."
+            )
+    
+    def extract_teacher_logits(self, x: torch.Tensor) -> torch.Tensor:
+        """Extract teacher logits using the teacher's own forward method."""
+        with torch.no_grad():
+            return self.teacher(x)
+    
+    def training_step(self, batch, batch_idx):
+        """Training step matching official OFA-KD implementation.
+        
+        Key difference from standard KD: the KD loss also uses ofa_loss (ATE)
+        with ofa_temperature, NOT standard KL divergence. This is the core of
+        the OFA method — all distillation uses adaptive target enhancement.
+        """
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+        teacher_images = batch['teacher_input_0'].to(self.device)
+        
+        # Single student forward: features + logits
+        student_stage_features, student_logits = self._student_forward_with_features(student_images)
+        
+        # Teacher logits (frozen)
+        teacher_logits = self.extract_teacher_logits(teacher_images)
+        
+        # Ground truth loss (with label smoothing)
+        loss_gt = self.gt_loss_weight * self.ce_loss(student_logits, labels)
+        
+        # Target mask for ATE
+        target_mask = F.one_hot(labels, self.num_classes).float()
+        
+        # KD loss: official OFA uses ofa_loss (ATE) for final logits too,
+        # NOT standard KL divergence. Uses ofa_temperature (1.0), not a
+        # separate KD temperature. This is the key insight of OFA.
+        loss_kd = self.kd_loss_weight * _ofa_loss(
+            student_logits, teacher_logits, target_mask,
+            self.ofa_eps, self.ofa_temperature
+        )
+        
+        # OFA loss: per-stage projected features -> logits -> ATE loss
+        loss_ofa = torch.tensor(0.0, device=self.device)
+        
+        for stage_feat, projector, head in zip(
+            student_stage_features, self.projectors, self.ofa_heads
+        ):
+            proj_feat = projector(stage_feat)
+            stage_logits = head(proj_feat)
+            loss_ofa = loss_ofa + _ofa_loss(
+                stage_logits, teacher_logits, target_mask,
+                self.ofa_eps, self.ofa_temperature
+            )
+        
+        loss_ofa = self.ofa_loss_weight * loss_ofa
+        
+        loss_total = loss_gt + loss_kd + loss_ofa
+        
+        self.log_dict({
+            'train/loss_gt_step': loss_gt,
+            'train/loss_kd_step': loss_kd,
+            'train/loss_ofa_step': loss_ofa,
+            'train/loss_total_step': loss_total,
+        }, on_step=True, on_epoch=True, prog_bar=True)
+        
+        return loss_total
+    
+    def shared_eval_step(self, batch, stage: str):
+        """Shared evaluation step."""
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+        student_logits = self.student(student_images)
+        
+        loss = self.ce_loss(student_logits, labels)
+        
+        preds = student_logits.argmax(dim=1)
+        acc = (preds == labels).float().mean()
+        
+        if stage == 'val':
+            self.val_auroc(student_logits, labels)
+            self.log('val/auroc', self.val_auroc, on_epoch=True, prog_bar=True)
+        elif stage == 'test':
+            self.test_auroc(student_logits, labels)
+            self.log('test/auroc', self.test_auroc, on_epoch=True, prog_bar=True)
+        
+        self.log(f'{stage}/accuracy', acc, on_epoch=True, prog_bar=True)
+        self.log(f'{stage}/loss_total', loss, on_epoch=True, prog_bar=True)
+        
+        return acc
+    
+    def validation_step(self, batch, batch_idx):
+        return self.shared_eval_step(batch, 'val')
+    
+    def test_step(self, batch, batch_idx):
         return self.shared_eval_step(batch, 'test')
 
 

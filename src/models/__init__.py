@@ -9,6 +9,7 @@ from .kd_module import (
     PATKDLitModule,
     RegionAwareAttention,
     AdaptiveFeedbackPrompt,
+    OFAKDLitModule,
     BaselineStudentModule
 )
 
@@ -21,6 +22,7 @@ __all__ = [
     "PATKDLitModule",
     "RegionAwareAttention",
     "AdaptiveFeedbackPrompt",
+    "OFAKDLitModule",
     "BaselineStudentModule",
 ]
 

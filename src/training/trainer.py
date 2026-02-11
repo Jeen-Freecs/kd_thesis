@@ -12,6 +12,7 @@ from ..models.kd_module import (
     ConfidenceBasedKDLitModule,
     PATKDLitModule,
     HCDKDLitModule,
+    OFAKDLitModule,
     BaselineStudentModule
 )
 from ..data.datamodule import CIFAR100DataModule
@@ -124,14 +125,30 @@ def train_kd_model(
     # Trainer
     # Note: With WandB logger, Lightning won't create lightning_logs/ directory
     # All logging goes to WandB, checkpoints go to our custom directory
+    # Gradient clipping: prevents training collapse from gradient explosion,
+    # especially important for PAT with real intermediate features where
+    # feature loss gradients flow back through the entire student backbone.
+    gradient_clip_val = train_config.get('gradient_clip_val', 1.0)
+    
+    # Precision: default to fp16 mixed precision for speed, but allow fp32
+    # via config. OFA with SGD lr=0.05 requires fp32 (official doesn't use AMP).
+    precision_cfg = train_config.get('precision', None)
+    if precision_cfg is not None:
+        precision = precision_cfg  # Use explicit config value (e.g., 32 or '16-mixed')
+    elif torch.cuda.is_available():
+        precision = '16-mixed'
+    else:
+        precision = 32
+    
     trainer = pl.Trainer(
         max_epochs=max_epochs,
         devices=1 if torch.cuda.is_available() else None,
         accelerator='gpu' if torch.cuda.is_available() else 'cpu',
         logger=wandb_logger,  # WandB logger prevents lightning_logs/ creation
-        precision='16-mixed' if torch.cuda.is_available() else 32,
+        precision=precision,
         log_every_n_steps=log_every_n_steps,
         callbacks=callbacks,
+        gradient_clip_val=gradient_clip_val,
         enable_progress_bar=True,
         enable_model_summary=True
     )
@@ -225,7 +242,7 @@ def create_kd_module_from_config(
             alpha=kd_config.get('alpha', 1.0),           # L_KL weight
             beta=kd_config.get('beta', 1.0),             # L_FD weight
             gamma=kd_config.get('gamma', 0.1),           # L_Reg weight
-            student_channels=kd_config.get('student_channels', [24, 32, 64, 1280]),
+            student_channels=kd_config.get('student_channels', [24, 32, 96, 1280]),
             teacher_feature_dim=kd_config.get('teacher_feature_dim', 768),
             embed_dim=kd_config.get('embed_dim', 256),
             num_heads=kd_config.get('num_heads', 8),
@@ -251,10 +268,29 @@ def create_kd_module_from_config(
             label_smoothing=kd_config.get('label_smoothing', 0.1),
         )
     
+    # OFA-KD: One-for-All Knowledge Distillation (NeurIPS 2023)
+    # Official implementation: https://github.com/Hao840/OFAKD
+    elif kd_type == 'ofa':
+        train_config = config.get('training', {})
+        kd_module = OFAKDLitModule(
+            **common_params,
+            ofa_eps=kd_config.get('ofa_eps', 1.0),
+            ofa_loss_weight=kd_config.get('ofa_loss_weight', 1.0),
+            gt_loss_weight=kd_config.get('gt_loss_weight', 1.0),
+            kd_loss_weight=kd_config.get('kd_loss_weight', 1.0),
+            ofa_temperature=kd_config.get('ofa_temperature', 1.0),
+            label_smoothing=kd_config.get('label_smoothing', 0.1),
+            student_channels=kd_config.get('student_channels', [24, 32, 96, 1280]),
+            student_final_dim=kd_config.get('student_final_dim', 1280),
+            teacher_feature_dim=kd_config.get('teacher_feature_dim', 768),
+            warmup_epochs=kd_config.get('warmup_epochs', 3),
+            max_epochs=train_config.get('max_epochs', 300),
+        )
+    
     else:
         raise ValueError(
             f"Unknown KD type: {kd_type}. "
-            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence', 'pat', 'hcd'"
+            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence', 'pat', 'hcd', 'ofa'"
         )
     
     return kd_module

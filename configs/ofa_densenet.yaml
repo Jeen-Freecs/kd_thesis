@@ -1,0 +1,55 @@
+# OFA-KD: One-for-All Knowledge Distillation with DenseNet-121 Teacher
+# Reference: NeurIPS 2023 — "One-for-All: Bridge the Gap Between
+#            Heterogeneous Architectures in Knowledge Distillation"
+# Official implementation: https://github.com/Hao840/OFAKD
+
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 128             # Official CIFAR CNN config uses 128 — critical for SGD convergence
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+  pre_trained: false
+  teacher_model_types: ["densenet"]
+  student_model_type: "mobilenet"
+
+# Model configuration
+model:
+  num_classes: 100
+  student_name: "mobilenetv2_100"
+  student_pretrained: false
+  teacher_names:
+    - "densenet121_cifar100"
+
+# Knowledge Distillation configuration
+kd:
+  type: "ofa"
+  temperature: 4.0
+  learning_rate: 0.05           # SGD lr (official)
+  num_classes: 100
+  # OFA-specific parameters
+  ofa_eps: 1.0                  # 1.0 for CIFAR-100 (official README)
+  ofa_loss_weight: 1.0
+  gt_loss_weight: 1.0
+  kd_loss_weight: 1.0
+  ofa_temperature: 1.0
+  label_smoothing: 0.1
+  student_channels: [24, 32, 96, 1280]
+  student_final_dim: 1280
+  teacher_feature_dim: 384      # DenseNet-121 CIFAR feature dimension
+  warmup_epochs: 3
+
+# Training configuration
+training:
+  max_epochs: 300
+  patience: 50
+  log_every_n_steps: 50
+  precision: 32               # Official OFA does NOT use AMP — fp16 + SGD lr=0.05 is unstable
+
+# Weights & Biases configuration
+wandb:
+  project: "KD-CIFAR100"
+  name: "OFA-DenseNet121"
+  log_model: "all"
+  resume: "allow"
