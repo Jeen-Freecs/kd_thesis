@@ -46,9 +46,14 @@ CONFIGS=(
     
     # PAT: Perspective-Aware Teaching (arXiv:2501.08885)
     # For heterogeneous architectures (CNN ↔ ViT)
-    "configs/hcd_densenet.yaml"
-    # "configs/hcd_resnet50.yaml"
-    # "configs/hcd_vit.yaml"
+    #"configs/pat_densenet.yaml"
+    #"configs/pat_resnet50.yaml"
+    # "configs/pat_vit.yaml"
+
+    # OFA-KD: One-for-All Knowledge Distillation (arXiv:2311.06371)
+    "configs/ofa_densenet.yaml"
+    # "configs/ofa_resnet50.yaml"
+    # "configs/ofa_vit.yaml"
 )
 
 ###############################################################################

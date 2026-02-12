@@ -285,6 +285,7 @@ def create_kd_module_from_config(
             teacher_feature_dim=kd_config.get('teacher_feature_dim', 768),
             warmup_epochs=kd_config.get('warmup_epochs', 3),
             max_epochs=train_config.get('max_epochs', 300),
+            teacher_input_size=kd_config.get('teacher_input_size', None),
         )
     
     else:

@@ -81,6 +81,14 @@ def get_transform(
     """
     from PIL import Image
     
+    # CIFAR-100 dataset statistics — used by the official OFA-KD and standard
+    # CIFAR-100 training pipelines.  Since the student is trained from scratch
+    # it adapts to any normalisation, and using the correct dataset stats
+    # ensures CNN teachers (DenseNet, ResNet) receive inputs that match the
+    # statistics they were trained with.
+    cifar100_mean = [0.5071, 0.4865, 0.4409]
+    cifar100_std  = [0.2673, 0.2564, 0.2762]
+
     if pre_trained:
         normalizer = transforms.Normalize(
             mean=[0.485, 0.456, 0.406],
@@ -88,8 +96,8 @@ def get_transform(
         )
     else:
         normalizer = transforms.Normalize(
-            mean=[0.5, 0.5, 0.5],
-            std=[0.5, 0.5, 0.5]
+            mean=cifar100_mean,
+            std=cifar100_std
         )
 
     if is_train:

@@ -2196,6 +2196,7 @@ class OFAKDLitModule(pl.LightningModule):
         teacher_feature_dim: int = 768,
         warmup_epochs: int = 3,
         max_epochs: int = 300,
+        teacher_input_size: int = None,
     ):
         super().__init__()
         
@@ -2214,6 +2215,7 @@ class OFAKDLitModule(pl.LightningModule):
         self.student_final_dim = student_final_dim
         self.warmup_epochs = warmup_epochs
         self.max_epochs = max_epochs
+        self.teacher_input_size = teacher_input_size
         
         if student_channels is None:
             student_channels = [24, 32, 96, 1280]
@@ -2408,15 +2410,31 @@ class OFAKDLitModule(pl.LightningModule):
         Key difference from standard KD: the KD loss also uses ofa_loss (ATE)
         with ofa_temperature, NOT standard KL divergence. This is the core of
         the OFA method — all distillation uses adaptive target enhancement.
+        
+        CRITICAL: In official OFA, teacher and student receive the EXACT SAME
+        image.  We use student_images for both so augmentation, resolution, and
+        normalisation are identical (the teacher_input may differ in crop,
+        flip, size, and stats).
         """
         labels = batch['label'].to(self.device)
         student_images = batch['student_input'].to(self.device)
-        teacher_images = batch['teacher_input_0'].to(self.device)
         
         # Single student forward: features + logits
         student_stage_features, student_logits = self._student_forward_with_features(student_images)
         
-        # Teacher logits (frozen)
+        # Teacher logits (frozen) — use student_images so teacher sees the
+        # exact same augmented image (matching official OFA implementation).
+        # CIFAR CNN teachers (DenseNet/ResNet) expect 32×32 input; feeding
+        # them 224×224 causes OOM.  Resize to teacher_input_size when set.
+        if self.teacher_input_size is not None and student_images.shape[-1] != self.teacher_input_size:
+            teacher_images = F.interpolate(
+                student_images,
+                size=(self.teacher_input_size, self.teacher_input_size),
+                mode='bilinear',
+                align_corners=False,
+            )
+        else:
+            teacher_images = student_images
         teacher_logits = self.extract_teacher_logits(teacher_images)
         
         # Ground truth loss (with label smoothing)
