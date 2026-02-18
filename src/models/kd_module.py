@@ -1238,6 +1238,19 @@ class PATKDLitModule(pl.LightningModule):
         self.val_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
         self.test_auroc = MulticlassAUROC(num_classes=self.num_classes, average='macro')
     
+    # ── checkpoint size fix: exclude frozen teacher ───────────────────
+    # The teacher is re-loaded from HuggingFace at init; no need to save
+    # its ~344MB (ViT) in every .ckpt file.
+
+    def state_dict(self, *args, **kwargs):
+        """Exclude frozen teacher weights from checkpoints."""
+        full = super().state_dict(*args, **kwargs)
+        return {k: v for k, v in full.items() if not k.startswith('teacher.')}
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Load checkpoint, tolerating missing teacher keys."""
+        return super().load_state_dict(state_dict, strict=False)
+
     def forward(self, x):
         """Forward pass through student model."""
         return self.student(x)
@@ -1564,6 +1577,719 @@ class PATKDLitModule(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         """Test step."""
         return self.shared_eval_step(batch, 'test')
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Multi-Teacher PAT Methods (Methods A, B, D)
+# Extends PAT from single-teacher to multi-teacher knowledge distillation
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TeacherFusionAttention(nn.Module):
+    """
+    Cross-attention module for fusing multiple teachers' adapted features.
+
+    The student's RAA representation acts as Query, while each teacher's
+    AFP-adapted features act as Keys/Values.  The student learns to
+    dynamically attend to the most relevant teacher for each sample.
+
+    Used by PAT-Attn (Method D).
+    """
+
+    def __init__(
+        self,
+        student_dim: int,
+        teacher_dims: List[int],
+        attn_dim: int = 256,
+        num_heads: int = 4,
+        dropout: float = 0.1,
+    ):
+        """
+        Args:
+            student_dim: Dimension of student RAA features (embed_dim)
+            teacher_dims: List of per-teacher feature dimensions [D_1, ..., D_K]
+            attn_dim: Shared attention dimension d_a
+            num_heads: Number of attention heads
+            dropout: Dropout rate
+        """
+        super().__init__()
+
+        self.attn_dim = attn_dim
+        self.num_teachers = len(teacher_dims)
+
+        # Query projection from student RAA space
+        self.W_Q = nn.Linear(student_dim, attn_dim)
+
+        # Per-teacher Key/Value projections (teacher_dim -> attn_dim)
+        self.W_K = nn.ModuleList([
+            nn.Linear(td, attn_dim) for td in teacher_dims
+        ])
+        self.W_V = nn.ModuleList([
+            nn.Linear(td, attn_dim) for td in teacher_dims
+        ])
+
+        # Multi-head cross-attention (query: 1 token, key/value: K tokens)
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=attn_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True,
+        )
+
+        self.norm = nn.LayerNorm(attn_dim)
+
+        # Output projection back to student space for feature distillation
+        self.out_proj = nn.Linear(attn_dim, attn_dim)
+
+    def forward(
+        self,
+        student_features: torch.Tensor,
+        teacher_features_list: List[torch.Tensor],
+    ):
+        """
+        Fuse multiple teacher features via cross-attention.
+
+        Args:
+            student_features: Student RAA output (B, student_dim)
+            teacher_features_list: List of AFP-adapted teacher features
+                                   [(B, D_1), ..., (B, D_K)]
+
+        Returns:
+            fused_features: (B, attn_dim)
+            attn_weights: (B, K) — per-sample attention over teachers
+        """
+        B = student_features.shape[0]
+
+        # Query: (B, 1, attn_dim)
+        Q = self.W_Q(student_features).unsqueeze(1)
+
+        # Keys & Values: project each teacher, stack → (B, K, attn_dim)
+        K_list = [self.W_K[k](teacher_features_list[k]) for k in range(self.num_teachers)]
+        V_list = [self.W_V[k](teacher_features_list[k]) for k in range(self.num_teachers)]
+
+        K = torch.stack(K_list, dim=1)  # (B, K, attn_dim)
+        V = torch.stack(V_list, dim=1)  # (B, K, attn_dim)
+
+        # Cross-attention: student queries teachers
+        attn_out, attn_weights_raw = self.cross_attn(Q, K, V)
+        # attn_out: (B, 1, attn_dim), attn_weights_raw: (B, 1, K)
+
+        fused = self.norm(attn_out.squeeze(1))  # (B, attn_dim)
+        fused = self.out_proj(fused)
+
+        # Attention weights per teacher (B, K)
+        attn_weights = attn_weights_raw.squeeze(1)
+
+        return fused, attn_weights
+
+
+class MultiTeacherPATIndLitModule(pl.LightningModule):
+    """
+    Method A: PAT-Ind — Independent multi-teacher PAT.
+
+    Runs a separate AFP + projection pathway per teacher while sharing
+    the student-side RAA.  All teacher losses are averaged equally.
+
+    L = L_CE + (1/K) * Σ_k [α·L_KL_k + β·L_FD_k + γ·L_Reg_k]
+    """
+
+    def __init__(
+        self,
+        teacher_models: List[nn.Module],
+        student_model: nn.Module,
+        temperature: float = 4.0,
+        learning_rate: float = 1e-3,
+        alpha: float = 1.0,
+        beta: float = 1.0,
+        gamma: float = 0.1,
+        num_classes: int = 100,
+        student_channels: List[int] = None,
+        teacher_feature_dims: List[int] = None,
+        embed_dim: int = 256,
+        num_heads: int = 8,
+    ):
+        super().__init__()
+        self.save_hyperparameters(ignore=["teacher_models", "student_model"])
+
+        self.temperature = temperature
+        self.learning_rate = learning_rate
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.num_classes = num_classes
+        self.embed_dim = embed_dim
+
+        if student_channels is None:
+            student_channels = [24, 32, 96, 1280]
+        self.student_channels = student_channels
+
+        # Student
+        if student_model is None:
+            raise ValueError("A student model must be provided.")
+        self.student = student_model
+
+        # Teachers (frozen)
+        if not teacher_models or len(teacher_models) == 0:
+            raise ValueError("At least one teacher model must be provided.")
+        self.teachers = nn.ModuleList(teacher_models)
+        self.num_teachers = len(teacher_models)
+        for t in self.teachers:
+            t.eval()
+            for p in t.parameters():
+                p.requires_grad = False
+
+        if teacher_feature_dims is None:
+            teacher_feature_dims = [768] * self.num_teachers
+        self.teacher_feature_dims = teacher_feature_dims
+
+        # Shared RAA (student side)
+        self.raa = RegionAwareAttention(
+            student_channels=student_channels,
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+        )
+
+        # Per-teacher AFP modules
+        self.afps = nn.ModuleList([
+            AdaptiveFeedbackPrompt(
+                teacher_dim=td,
+                prompt_dim=embed_dim // 2,
+            )
+            for td in teacher_feature_dims
+        ])
+
+        # Per-teacher projection heads (embed_dim -> teacher_dim)
+        self.student_projs = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(embed_dim, embed_dim),
+                nn.ReLU(inplace=True),
+                nn.Linear(embed_dim, td),
+            )
+            for td in teacher_feature_dims
+        ])
+
+        # Loss functions
+        self.kl_div_loss = KLDivLoss(reduction='batchmean')
+        self.ce_loss = CrossEntropyLoss()
+        self.mse_loss = nn.MSELoss()
+
+        # Metrics
+        self.val_auroc = MulticlassAUROC(num_classes=num_classes, average='macro')
+        self.test_auroc = MulticlassAUROC(num_classes=num_classes, average='macro')
+
+    # ── checkpoint size fix: exclude frozen teachers ────────────────
+    # Without this, every .ckpt includes all 3 frozen teachers (~464MB)
+    # making checkpoints ~500MB instead of ~34MB.  With WandB log_model='all'
+    # keeping local copies, this fills the 32GB root overlay in <100 epochs.
+
+    def state_dict(self, *args, **kwargs):
+        """Exclude frozen teacher weights from checkpoints."""
+        full = super().state_dict(*args, **kwargs)
+        return {k: v for k, v in full.items() if not k.startswith('teachers.')}
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Load checkpoint, tolerating missing teacher keys (they're re-loaded at init)."""
+        return super().load_state_dict(state_dict, strict=False)
+
+    # ── forward / optimizers ──────────────────────────────────────────
+
+    def forward(self, x):
+        return self.student(x)
+
+    def configure_optimizers(self):
+        params = (
+            list(self.student.parameters()) +
+            list(self.raa.parameters()) +
+            list(self.afps.parameters()) +
+            list(self.student_projs.parameters())
+        )
+        optimizer = torch.optim.AdamW(params, lr=self.learning_rate, weight_decay=1e-4)
+
+        warmup_epochs = 5
+        max_epochs = 300
+        warmup_sched = torch.optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=1e-4 / max(self.learning_rate, 1e-8),
+            end_factor=1.0,
+            total_iters=warmup_epochs,
+        )
+        cosine_sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_epochs - warmup_epochs, eta_min=1e-6,
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup_sched, cosine_sched],
+            milestones=[warmup_epochs],
+        )
+        return [optimizer], [scheduler]
+
+    # ── student feature extraction ────────────────────────────────────
+
+    def _student_forward_with_features(self, x: torch.Tensor):
+        """Run student forward pass, capturing real intermediate features."""
+        features = []
+        if hasattr(self.student, 'blocks'):
+            target_indices = {2, 5, 12}
+            x = self.student.conv_stem(x)
+            x = self.student.bn1(x)
+            if hasattr(self.student, 'act1'):
+                x = self.student.act1(x)
+            block_idx = 0
+            for group in self.student.blocks:
+                for block in group:
+                    x = block(x)
+                    if block_idx in target_indices:
+                        features.append(x)
+                    block_idx += 1
+            x = self.student.conv_head(x)
+            x = self.student.bn2(x)
+            features.append(x)
+            if hasattr(self.student, 'act2'):
+                x = self.student.act2(x)
+            logits = self.student.forward_head(x)
+            return features, logits
+        elif hasattr(self.student, 'layer1'):
+            x = self.student.conv1(x)
+            x = self.student.bn1(x)
+            x = self.student.act1(x)
+            if hasattr(self.student, 'maxpool'):
+                x = self.student.maxpool(x)
+            for layer in [self.student.layer1, self.student.layer2,
+                          self.student.layer3, self.student.layer4]:
+                x = layer(x)
+                features.append(x)
+            logits = self.student.forward_head(x)
+            return features, logits
+        else:
+            raise NotImplementedError(
+                f"Cannot extract features from {type(self.student).__name__}."
+            )
+
+    # ── teacher feature extraction ────────────────────────────────────
+
+    def _extract_teacher_features(self, x: torch.Tensor, teacher: nn.Module):
+        """Extract penultimate features + logits from a single teacher."""
+        with torch.no_grad():
+            if hasattr(teacher, 'forward_features'):
+                features = teacher.forward_features(x)
+                if len(features.shape) == 4:
+                    features = F.adaptive_avg_pool2d(features, 1).flatten(1)
+                elif len(features.shape) == 3:
+                    features = features[:, 0]
+                if hasattr(teacher, 'head'):
+                    logits = teacher.head(features)
+                elif hasattr(teacher, 'classifier'):
+                    logits = teacher.classifier(features)
+                elif hasattr(teacher, 'fc'):
+                    logits = teacher.fc(features)
+                else:
+                    logits = teacher(x)
+            elif hasattr(teacher, 'features') and hasattr(teacher, 'classifier'):
+                features = teacher.features(x)
+                features = F.relu(features, inplace=False)
+                features = F.adaptive_avg_pool2d(features, (1, 1))
+                features = torch.flatten(features, 1)
+                logits = teacher.classifier(features)
+            else:
+                logits = teacher(x)
+                features = logits
+        return features, logits
+
+    # ── loss computation ──────────────────────────────────────────────
+
+    def _compute_per_teacher_losses(
+        self,
+        student_logits, student_aligned, labels,
+        teacher_features_k, teacher_logits_k,
+        frozen_teacher_features_k, afp_k, proj_k,
+    ):
+        """Compute PAT losses for a single teacher channel."""
+        # L_KL
+        student_soft = F.log_softmax(student_logits / self.temperature, dim=1)
+        teacher_soft = F.softmax(teacher_logits_k / self.temperature, dim=1)
+        loss_kl = self.kl_div_loss(student_soft, teacher_soft) * (self.temperature ** 2)
+
+        # Project student features to this teacher's dim
+        student_proj = proj_k(student_aligned)
+
+        # AFP adaptation
+        teacher_adapted = afp_k(
+            teacher_features_k, student_proj, frozen_teacher_features_k,
+        )
+
+        # L_FD
+        s_norm = F.normalize(student_proj, p=2, dim=1)
+        t_norm = F.normalize(teacher_adapted, p=2, dim=1)
+        loss_fd = self.mse_loss(s_norm, t_norm)
+
+        # L_Reg
+        frozen_norm = F.normalize(frozen_teacher_features_k, p=2, dim=1)
+        adapted_norm = F.normalize(teacher_adapted, p=2, dim=1)
+        loss_reg = self.mse_loss(adapted_norm, frozen_norm)
+
+        return loss_kl, loss_fd, loss_reg, teacher_adapted
+
+    # ── training / eval steps ─────────────────────────────────────────
+
+    def training_step(self, batch, batch_idx):
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+
+        # Student forward
+        stage_feats, student_logits = self._student_forward_with_features(student_images)
+        stable_feats = [f.detach() if i < 2 else f for i, f in enumerate(stage_feats)]
+        student_aligned = self.raa(stable_feats)
+
+        # L_CE
+        loss_ce = self.ce_loss(student_logits, labels)
+
+        total_kl = 0.0
+        total_fd = 0.0
+        total_reg = 0.0
+
+        for k in range(self.num_teachers):
+            t_images = batch[f'teacher_input_{k}'].to(self.device)
+            t_feats, t_logits = self._extract_teacher_features(t_images, self.teachers[k])
+            frozen_feats = t_feats.clone()
+
+            kl, fd, reg, _ = self._compute_per_teacher_losses(
+                student_logits, student_aligned, labels,
+                t_feats, t_logits, frozen_feats,
+                self.afps[k], self.student_projs[k],
+            )
+            total_kl = total_kl + kl
+            total_fd = total_fd + fd
+            total_reg = total_reg + reg
+
+        # Average across teachers
+        total_kl = total_kl / self.num_teachers
+        total_fd = total_fd / self.num_teachers
+        total_reg = total_reg / self.num_teachers
+
+        loss_total = (
+            loss_ce
+            + self.alpha * total_kl
+            + self.beta * total_fd
+            + self.gamma * total_reg
+        )
+
+        self.log_dict({
+            'train/loss_ce': loss_ce,
+            'train/loss_kl': total_kl,
+            'train/loss_fd': total_fd,
+            'train/loss_reg': total_reg,
+            'train/loss_total': loss_total,
+        }, on_epoch=True, prog_bar=True)
+        return loss_total
+
+    def shared_eval_step(self, batch, stage: str):
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+        student_logits = self.student(student_images)
+        loss = self.ce_loss(student_logits, labels)
+        preds = student_logits.argmax(dim=1)
+        acc = (preds == labels).float().mean()
+        if stage == 'val':
+            self.val_auroc(student_logits, labels)
+            self.log('val/auroc', self.val_auroc, on_epoch=True, prog_bar=True)
+        elif stage == 'test':
+            self.test_auroc(student_logits, labels)
+            self.log('test/auroc', self.test_auroc, on_epoch=True, prog_bar=True)
+        self.log(f'{stage}/accuracy', acc, on_epoch=True, prog_bar=True)
+        self.log(f'{stage}/loss_total', loss, on_epoch=True, prog_bar=True)
+        return acc
+
+    def validation_step(self, batch, batch_idx):
+        return self.shared_eval_step(batch, 'val')
+
+    def test_step(self, batch, batch_idx):
+        return self.shared_eval_step(batch, 'test')
+
+
+class MultiTeacherPATCWLitModule(MultiTeacherPATIndLitModule):
+    """
+    Method B: PAT-CW — Confidence-Weighted multi-teacher PAT.
+
+    Extends PAT-Ind by weighting each teacher's contribution using
+    CA-WKD per-sample confidence weights (from Methods 1-2).
+
+    L = L_CE + Σ_k w̄_k [α·L_KL_k + β·L_FD_k + γ·L_Reg_k]
+
+    where w_k = (1/(K-1)) * (1 - exp(CE_k) / Σ_j exp(CE_j))
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def _compute_teacher_weights(
+        self,
+        teacher_logits: List[torch.Tensor],
+        labels: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute CA-WKD per-sample teacher weights.
+
+        Returns:
+            weights: (B, K) tensor of per-sample teacher weights.
+        """
+        K = len(teacher_logits)
+        B = teacher_logits[0].shape[0]
+
+        if K == 1:
+            return torch.ones((B, 1), device=teacher_logits[0].device)
+
+        ce_losses = torch.stack([
+            F.cross_entropy(tl, labels, reduction='none') for tl in teacher_logits
+        ], dim=1)  # (B, K)
+
+        exp_losses = torch.exp(ce_losses)
+        sum_exp = exp_losses.sum(dim=1, keepdim=True)
+        weights = (1.0 / (K - 1)) * (1.0 - exp_losses / sum_exp)
+        return weights
+
+    def training_step(self, batch, batch_idx):
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+
+        # Student forward
+        stage_feats, student_logits = self._student_forward_with_features(student_images)
+        stable_feats = [f.detach() if i < 2 else f for i, f in enumerate(stage_feats)]
+        student_aligned = self.raa(stable_feats)
+
+        # L_CE
+        loss_ce = self.ce_loss(student_logits, labels)
+
+        # Gather all teacher logits for weight computation
+        all_teacher_feats = []
+        all_teacher_logits = []
+        all_frozen_feats = []
+        for k in range(self.num_teachers):
+            t_images = batch[f'teacher_input_{k}'].to(self.device)
+            t_feats, t_logits = self._extract_teacher_features(t_images, self.teachers[k])
+            all_teacher_feats.append(t_feats)
+            all_teacher_logits.append(t_logits)
+            all_frozen_feats.append(t_feats.clone())
+
+        # Compute CA-WKD weights (B, K)
+        weights = self._compute_teacher_weights(all_teacher_logits, labels)
+
+        total_kl = 0.0
+        total_fd = 0.0
+        total_reg = 0.0
+
+        for k in range(self.num_teachers):
+            kl, fd, reg, _ = self._compute_per_teacher_losses(
+                student_logits, student_aligned, labels,
+                all_teacher_feats[k], all_teacher_logits[k],
+                all_frozen_feats[k],
+                self.afps[k], self.student_projs[k],
+            )
+            w_k = weights[:, k].mean()  # batch-averaged weight
+            total_kl = total_kl + w_k * kl
+            total_fd = total_fd + w_k * fd
+            total_reg = total_reg + w_k * reg
+
+        loss_total = (
+            loss_ce
+            + self.alpha * total_kl
+            + self.beta * total_fd
+            + self.gamma * total_reg
+        )
+
+        # Log per-teacher weights
+        for k in range(self.num_teachers):
+            self.log(f'train/teacher_{k}_weight', weights[:, k].mean(),
+                     on_epoch=True, prog_bar=False)
+
+        self.log_dict({
+            'train/loss_ce': loss_ce,
+            'train/loss_kl': total_kl,
+            'train/loss_fd': total_fd,
+            'train/loss_reg': total_reg,
+            'train/loss_total': loss_total,
+        }, on_epoch=True, prog_bar=True)
+        return loss_total
+
+
+class MultiTeacherPATAttnLitModule(MultiTeacherPATIndLitModule):
+    """
+    Method D: PAT-Attn — Attention-Based Teacher Fusion.
+
+    Uses a learned cross-attention mechanism where the student's RAA
+    features act as Query and each teacher's AFP-adapted features act
+    as Keys/Values.  The student dynamically attends to the most
+    relevant teacher per sample.
+
+    L = L_CE + α·L_KL^attn + β·L_FD^attn + γ·(1/K)·Σ L_Reg_k + λ_e·L_entropy
+    """
+
+    def __init__(
+        self,
+        teacher_models: List[nn.Module],
+        student_model: nn.Module,
+        temperature: float = 4.0,
+        learning_rate: float = 1e-3,
+        alpha: float = 1.0,
+        beta: float = 1.0,
+        gamma: float = 0.1,
+        num_classes: int = 100,
+        student_channels: List[int] = None,
+        teacher_feature_dims: List[int] = None,
+        embed_dim: int = 256,
+        num_heads: int = 8,
+        attn_dim: int = 256,
+        attn_heads: int = 4,
+        entropy_weight: float = 0.01,
+    ):
+        # Store attn-specific params before super().__init__
+        self._attn_dim = attn_dim
+        self._attn_heads = attn_heads
+        self._entropy_weight = entropy_weight
+        self._teacher_feature_dims_init = teacher_feature_dims
+
+        super().__init__(
+            teacher_models=teacher_models,
+            student_model=student_model,
+            temperature=temperature,
+            learning_rate=learning_rate,
+            alpha=alpha,
+            beta=beta,
+            gamma=gamma,
+            num_classes=num_classes,
+            student_channels=student_channels,
+            teacher_feature_dims=teacher_feature_dims,
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+        )
+
+        self.entropy_weight = entropy_weight
+        self.attn_dim = attn_dim
+
+        # Teacher Fusion Attention
+        self.teacher_fusion = TeacherFusionAttention(
+            student_dim=embed_dim,
+            teacher_dims=self.teacher_feature_dims,
+            attn_dim=attn_dim,
+            num_heads=attn_heads,
+        )
+
+        # Student output projection for feature distillation (embed_dim -> attn_dim)
+        self.student_out_proj = nn.Linear(embed_dim, attn_dim)
+
+    def configure_optimizers(self):
+        params = (
+            list(self.student.parameters()) +
+            list(self.raa.parameters()) +
+            list(self.afps.parameters()) +
+            list(self.student_projs.parameters()) +
+            list(self.teacher_fusion.parameters()) +
+            list(self.student_out_proj.parameters())
+        )
+        optimizer = torch.optim.AdamW(params, lr=self.learning_rate, weight_decay=1e-4)
+
+        warmup_epochs = 5
+        max_epochs = 300
+        warmup_sched = torch.optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=1e-4 / max(self.learning_rate, 1e-8),
+            end_factor=1.0,
+            total_iters=warmup_epochs,
+        )
+        cosine_sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max_epochs - warmup_epochs, eta_min=1e-6,
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup_sched, cosine_sched],
+            milestones=[warmup_epochs],
+        )
+        return [optimizer], [scheduler]
+
+    def training_step(self, batch, batch_idx):
+        labels = batch['label'].to(self.device)
+        student_images = batch['student_input'].to(self.device)
+
+        # Student forward
+        stage_feats, student_logits = self._student_forward_with_features(student_images)
+        stable_feats = [f.detach() if i < 2 else f for i, f in enumerate(stage_feats)]
+        student_aligned = self.raa(stable_feats)  # (B, embed_dim)
+
+        # L_CE
+        loss_ce = self.ce_loss(student_logits, labels)
+
+        # Per-teacher AFP adaptation
+        adapted_teacher_feats = []
+        all_teacher_logits = []
+        total_reg = 0.0
+
+        for k in range(self.num_teachers):
+            t_images = batch[f'teacher_input_{k}'].to(self.device)
+            t_feats, t_logits = self._extract_teacher_features(t_images, self.teachers[k])
+            frozen_feats = t_feats.clone()
+            all_teacher_logits.append(t_logits)
+
+            # Project student → teacher dim for AFP feedback
+            student_proj_k = self.student_projs[k](student_aligned)
+            teacher_adapted_k = self.afps[k](t_feats, student_proj_k, frozen_feats)
+            adapted_teacher_feats.append(teacher_adapted_k)
+
+            # L_Reg per teacher
+            frozen_norm = F.normalize(frozen_feats, p=2, dim=1)
+            adapted_norm = F.normalize(teacher_adapted_k, p=2, dim=1)
+            total_reg = total_reg + self.mse_loss(adapted_norm, frozen_norm)
+
+        total_reg = total_reg / self.num_teachers
+
+        # ── Cross-attention fusion ────────────────────────────────────
+        fused_teacher, attn_weights = self.teacher_fusion(
+            student_aligned, adapted_teacher_feats,
+        )  # fused: (B, attn_dim), attn_weights: (B, K)
+
+        # L_FD: MSE between projected student and fused teacher
+        student_proj_out = self.student_out_proj(student_aligned)
+        s_norm = F.normalize(student_proj_out, p=2, dim=1)
+        t_norm = F.normalize(fused_teacher, p=2, dim=1)
+        loss_fd = self.mse_loss(s_norm, t_norm)
+
+        # L_KL: attention-weighted logit distillation
+        # z_T^attn = Σ A_k * z_T_k
+        stacked_logits = torch.stack(all_teacher_logits, dim=1)  # (B, K, C)
+        attn_expanded = attn_weights.unsqueeze(-1)  # (B, K, 1)
+        merged_logits = (stacked_logits * attn_expanded).sum(dim=1)  # (B, C)
+
+        student_soft = F.log_softmax(student_logits / self.temperature, dim=1)
+        teacher_soft = F.softmax(merged_logits / self.temperature, dim=1)
+        loss_kl = self.kl_div_loss(student_soft, teacher_soft) * (self.temperature ** 2)
+
+        # L_entropy: encourage attention spread (prevent collapse)
+        # H = -Σ A_k log(A_k); we MAXIMISE entropy → minimise -H
+        eps = 1e-8
+        loss_entropy = (attn_weights * torch.log(attn_weights + eps)).sum(dim=1).mean()
+        # loss_entropy is negative when entropy is high; we add it so minimising
+        # the total loss maximises entropy.
+
+        loss_total = (
+            loss_ce
+            + self.alpha * loss_kl
+            + self.beta * loss_fd
+            + self.gamma * total_reg
+            + self.entropy_weight * loss_entropy
+        )
+
+        # Logging
+        log_dict = {
+            'train/loss_ce': loss_ce,
+            'train/loss_kl': loss_kl,
+            'train/loss_fd': loss_fd,
+            'train/loss_reg': total_reg,
+            'train/loss_entropy': loss_entropy,
+            'train/loss_total': loss_total,
+        }
+        for k in range(self.num_teachers):
+            log_dict[f'train/attn_teacher_{k}'] = attn_weights[:, k].mean()
+
+        self.log_dict(log_dict, on_epoch=True, prog_bar=True)
+        return loss_total
 
 
 def _hcd_remove_one_hot(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:

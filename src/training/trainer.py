@@ -13,7 +13,10 @@ from ..models.kd_module import (
     PATKDLitModule,
     HCDKDLitModule,
     OFAKDLitModule,
-    BaselineStudentModule
+    BaselineStudentModule,
+    MultiTeacherPATIndLitModule,
+    MultiTeacherPATCWLitModule,
+    MultiTeacherPATAttnLitModule,
 )
 from ..data.datamodule import CIFAR100DataModule
 from ..utils.logger import get_logger
@@ -248,6 +251,48 @@ def create_kd_module_from_config(
             num_heads=kd_config.get('num_heads', 8),
         )
     
+    # Multi-Teacher PAT-Ind (Method A): Independent channels
+    elif kd_type == 'multi_pat_ind':
+        kd_module = MultiTeacherPATIndLitModule(
+            **common_params,
+            alpha=kd_config.get('alpha', 1.0),
+            beta=kd_config.get('beta', 1.0),
+            gamma=kd_config.get('gamma', 0.1),
+            student_channels=kd_config.get('student_channels', [24, 32, 96, 1280]),
+            teacher_feature_dims=kd_config.get('teacher_feature_dims', [768]),
+            embed_dim=kd_config.get('embed_dim', 256),
+            num_heads=kd_config.get('num_heads', 8),
+        )
+    
+    # Multi-Teacher PAT-CW (Method B): Confidence-Weighted
+    elif kd_type == 'multi_pat_cw':
+        kd_module = MultiTeacherPATCWLitModule(
+            **common_params,
+            alpha=kd_config.get('alpha', 1.0),
+            beta=kd_config.get('beta', 1.0),
+            gamma=kd_config.get('gamma', 0.1),
+            student_channels=kd_config.get('student_channels', [24, 32, 96, 1280]),
+            teacher_feature_dims=kd_config.get('teacher_feature_dims', [768]),
+            embed_dim=kd_config.get('embed_dim', 256),
+            num_heads=kd_config.get('num_heads', 8),
+        )
+    
+    # Multi-Teacher PAT-Attn (Method D): Attention-Based Fusion
+    elif kd_type == 'multi_pat_attn':
+        kd_module = MultiTeacherPATAttnLitModule(
+            **common_params,
+            alpha=kd_config.get('alpha', 1.0),
+            beta=kd_config.get('beta', 1.0),
+            gamma=kd_config.get('gamma', 0.1),
+            student_channels=kd_config.get('student_channels', [24, 32, 96, 1280]),
+            teacher_feature_dims=kd_config.get('teacher_feature_dims', [768]),
+            embed_dim=kd_config.get('embed_dim', 256),
+            num_heads=kd_config.get('num_heads', 8),
+            attn_dim=kd_config.get('attn_dim', 256),
+            attn_heads=kd_config.get('attn_heads', 4),
+            entropy_weight=kd_config.get('entropy_weight', 0.01),
+        )
+    
     # HCD: Heterogeneous Complementary Distillation (arXiv:2511.10942)
     # Official implementation: https://github.com/yema-web/HCD
     elif kd_type == 'hcd':
@@ -291,7 +336,9 @@ def create_kd_module_from_config(
     else:
         raise ValueError(
             f"Unknown KD type: {kd_type}. "
-            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence', 'pat', 'hcd', 'ofa'"
+            f"Supported types: 'baseline', 'ca_weighted', 'dynamic', 'confidence', "
+            f"'pat', 'multi_pat_ind', 'multi_pat_cw', 'multi_pat_attn', "
+            f"'hcd', 'ofa'"
         )
     
     return kd_module

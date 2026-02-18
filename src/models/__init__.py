@@ -9,6 +9,10 @@ from .kd_module import (
     PATKDLitModule,
     RegionAwareAttention,
     AdaptiveFeedbackPrompt,
+    TeacherFusionAttention,
+    MultiTeacherPATIndLitModule,
+    MultiTeacherPATCWLitModule,
+    MultiTeacherPATAttnLitModule,
     OFAKDLitModule,
     BaselineStudentModule
 )
@@ -22,6 +26,10 @@ __all__ = [
     "PATKDLitModule",
     "RegionAwareAttention",
     "AdaptiveFeedbackPrompt",
+    "TeacherFusionAttention",
+    "MultiTeacherPATIndLitModule",
+    "MultiTeacherPATCWLitModule",
+    "MultiTeacherPATAttnLitModule",
     "OFAKDLitModule",
     "BaselineStudentModule",
 ]

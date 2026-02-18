@@ -1,0 +1,56 @@
+# Multi-Teacher PAT-Ind (Method A): Independent Channels
+# Separate AFP + projection per teacher, shared RAA, averaged losses.
+# L = L_CE + (1/K) * Σ_k [α·L_KL_k + β·L_FD_k + γ·L_Reg_k]
+#
+# Teachers: DenseNet-121 (384d), ResNet-50 (2048d), ViT-Base (768d)
+# Student:  MobileNetV2
+
+# Data configuration
+data:
+  data_dir: "./data"
+  batch_size: 48              # Reduced: 3 teachers × feature extraction is memory-heavy
+  num_workers: 4
+  val_size: 5000
+  seed: 42
+  pre_trained: false
+  teacher_model_types: ["densenet", "resnet", "vit"]
+  student_model_type: "mobilenet"
+
+# Model configuration
+model:
+  num_classes: 100
+  student_name: "mobilenetv2_100"
+  student_pretrained: false
+  teacher_names:
+    - "densenet121_cifar100"
+    - "resnet50_cifar100"
+    - "vit"
+
+# Knowledge Distillation configuration
+kd:
+  type: "multi_pat_ind"
+  temperature: 4.0
+  learning_rate: 0.001
+  num_classes: 100
+  # PAT loss weights
+  alpha: 1.0                  # L_KL weight
+  beta: 1.5                   # L_FD weight (higher for heterogeneous)
+  gamma: 0.1                  # L_Reg weight
+  # Architecture
+  student_channels: [24, 32, 96, 1280]
+  teacher_feature_dims: [384, 2048, 768]   # DenseNet, ResNet, ViT
+  embed_dim: 256
+  num_heads: 8
+
+# Training configuration
+training:
+  max_epochs: 300
+  patience: 50
+  log_every_n_steps: 50
+
+# Weights & Biases configuration
+wandb:
+  project: "KD-CIFAR100"
+  name: "MultiPAT-Ind-3T"
+  log_model: "all"
+  resume: "allow"
