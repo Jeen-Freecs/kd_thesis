@@ -50,10 +50,10 @@ CONFIGS=(
     #"configs/pat_resnet50.yaml"
     # "configs/pat_vit.yaml"
 
-    # OFA-KD: One-for-All Knowledge Distillation (arXiv:2311.06371)
-    "configs/ofa_densenet.yaml"
-    # "configs/ofa_resnet50.yaml"
-    # "configs/ofa_vit.yaml"
+    #Multi-teacher PAT
+    "configs/multi_pat_ind.yaml"
+    # "configs/multi_pat_cw.yaml"
+    # "configs/multi_pat_attn.yaml"
 )
 
 ###############################################################################

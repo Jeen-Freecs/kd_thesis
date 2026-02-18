@@ -42,6 +42,8 @@ echo "Installing PyTorch with CUDA support..."
 # pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 # For CUDA 12.1, uncomment below and comment above:
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# For CUDA 12.8 (latest), uncomment below and comment above:
+#pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
 
 # Install other requirements
 echo "Installing remaining dependencies..."
