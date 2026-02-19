@@ -1671,7 +1671,15 @@ class TeacherFusionAttention(nn.Module):
         V = torch.stack(V_list, dim=1)  # (B, K, attn_dim)
 
         # Cross-attention: student queries teachers
-        attn_out, attn_weights_raw = self.cross_attn(Q, K, V)
+        # Disable AMP autocast for numerically stable softmax inside MHA.
+        # With only K=3 keys, fp16 softmax can collapse to one-hot,
+        # producing 0-valued weights whose log causes NaN.
+        # Using autocast(enabled=False) instead of manual .float() casts
+        # to keep AMP GradScaler's inf-check bookkeeping intact.
+        with torch.amp.autocast(device_type='cuda', enabled=False):
+            attn_out, attn_weights_raw = self.cross_attn(
+                Q.float(), K.float(), V.float(),
+            )
         # attn_out: (B, 1, attn_dim), attn_weights_raw: (B, 1, K)
 
         fused = self.norm(attn_out.squeeze(1))  # (B, attn_dim)
@@ -2245,28 +2253,43 @@ class MultiTeacherPATAttnLitModule(MultiTeacherPATIndLitModule):
             student_aligned, adapted_teacher_feats,
         )  # fused: (B, attn_dim), attn_weights: (B, K)
 
-        # L_FD: MSE between projected student and fused teacher
-        student_proj_out = self.student_out_proj(student_aligned)
-        s_norm = F.normalize(student_proj_out, p=2, dim=1)
-        t_norm = F.normalize(fused_teacher, p=2, dim=1)
-        loss_fd = self.mse_loss(s_norm, t_norm)
+        # Clamp attention weights to prevent collapse → log(0) = -inf → NaN.
+        # With only K=3 keys the softmax in MultiheadAttention can easily
+        # send one weight to ~0 in fp16, causing NaN in the entropy term.
+        attn_weights = attn_weights.clamp(min=1e-6)
+        attn_weights = attn_weights / attn_weights.sum(dim=1, keepdim=True)
 
-        # L_KL: attention-weighted logit distillation
-        # z_T^attn = Σ A_k * z_T_k
-        stacked_logits = torch.stack(all_teacher_logits, dim=1)  # (B, K, C)
-        attn_expanded = attn_weights.unsqueeze(-1)  # (B, K, 1)
-        merged_logits = (stacked_logits * attn_expanded).sum(dim=1)  # (B, C)
+        # ── Numerically sensitive losses: disable AMP autocast ────────
+        # Manual .float() casts inside autocast break GradScaler's inf-check
+        # bookkeeping (AssertionError: No inf checks were recorded).
+        # Instead, disable autocast for the entire loss-computation block.
+        with torch.amp.autocast(device_type='cuda', enabled=False):
+            # Promote to fp32 once at the boundary
+            student_proj_out_f = self.student_out_proj(student_aligned).float()
+            fused_teacher_f = fused_teacher.float()
+            attn_weights_f = attn_weights.float()
 
-        student_soft = F.log_softmax(student_logits / self.temperature, dim=1)
-        teacher_soft = F.softmax(merged_logits / self.temperature, dim=1)
-        loss_kl = self.kl_div_loss(student_soft, teacher_soft) * (self.temperature ** 2)
+            # L_FD: MSE between projected student and fused teacher
+            s_norm = F.normalize(student_proj_out_f, p=2, dim=1)
+            t_norm = F.normalize(fused_teacher_f, p=2, dim=1)
+            loss_fd = self.mse_loss(s_norm, t_norm)
 
-        # L_entropy: encourage attention spread (prevent collapse)
-        # H = -Σ A_k log(A_k); we MAXIMISE entropy → minimise -H
-        eps = 1e-8
-        loss_entropy = (attn_weights * torch.log(attn_weights + eps)).sum(dim=1).mean()
-        # loss_entropy is negative when entropy is high; we add it so minimising
-        # the total loss maximises entropy.
+            # L_KL: attention-weighted logit distillation
+            # z_T^attn = Σ A_k * z_T_k
+            stacked_logits = torch.stack(all_teacher_logits, dim=1).float()  # (B, K, C)
+            attn_expanded = attn_weights_f.unsqueeze(-1)  # (B, K, 1)
+            merged_logits = (stacked_logits * attn_expanded).sum(dim=1)  # (B, C)
+
+            student_logits_f = student_logits.float()
+            student_soft = F.log_softmax(student_logits_f / self.temperature, dim=1)
+            teacher_soft = F.softmax(merged_logits / self.temperature, dim=1)
+            loss_kl = self.kl_div_loss(student_soft, teacher_soft) * (self.temperature ** 2)
+
+            # L_entropy: encourage attention spread (prevent collapse)
+            # H = -Σ A_k log(A_k); we MAXIMISE entropy → minimise -H
+            loss_entropy = (attn_weights_f * torch.log(attn_weights_f)).sum(dim=1).mean()
+            # loss_entropy is negative when entropy is high; we add it so minimising
+            # the total loss maximises entropy.
 
         loss_total = (
             loss_ce
@@ -2275,6 +2298,11 @@ class MultiTeacherPATAttnLitModule(MultiTeacherPATIndLitModule):
             + self.gamma * total_reg
             + self.entropy_weight * loss_entropy
         )
+
+        # NaN safety: if loss is NaN, return zero loss so the run survives
+        # and early stopping handles it via flat val/accuracy.
+        if torch.isnan(loss_total) or torch.isinf(loss_total):
+            loss_total = torch.zeros_like(loss_total, requires_grad=True)
 
         # Logging
         log_dict = {

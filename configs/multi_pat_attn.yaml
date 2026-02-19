@@ -43,8 +43,8 @@ kd:
   num_heads: 8
   # Attention fusion params
   attn_dim: 256
-  attn_heads: 4
-  entropy_weight: 0.01
+  attn_heads: 1               # Only 3 teacher keys → 4 heads causes instability; 1 head is sufficient
+  entropy_weight: 0.1         # Increased from 0.01 to strongly prevent attention collapse
 
 # Training configuration
 training:
