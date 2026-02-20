@@ -51,5 +51,5 @@ training:
 wandb:
   project: "KD-CIFAR100"
   name: "OFA-ViT"
-  log_model: "all"
+  log_model: false
   resume: "allow"

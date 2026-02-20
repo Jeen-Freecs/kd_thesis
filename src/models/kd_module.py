@@ -92,9 +92,10 @@ class CAWeightedKDLitModule(pl.LightningModule):
             weight_decay=1e-4
         )
         
+        max_epochs = self.trainer.max_epochs if self.trainer and self.trainer.max_epochs else 300
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=100,
+            T_max=max_epochs,
             eta_min=1e-6
         )
         
@@ -353,9 +354,10 @@ class DynamicKDLitModule(pl.LightningModule):
             weight_decay=1e-4
         )
         
+        max_epochs = self.trainer.max_epochs if self.trainer and self.trainer.max_epochs else 300
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=100,
+            T_max=max_epochs,
             eta_min=1e-6
         )
         
@@ -657,9 +659,10 @@ class ConfidenceBasedKDLitModule(pl.LightningModule):
             weight_decay=1e-4
         )
         
+        max_epochs = self.trainer.max_epochs if self.trainer and self.trainer.max_epochs else 300
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=100,
+            T_max=max_epochs,
             eta_min=1e-6
         )
         
@@ -1278,7 +1281,7 @@ class PATKDLitModule(pl.LightningModule):
         
         # Linear warmup for 5 epochs, then cosine decay
         warmup_epochs = 5
-        max_epochs = 300
+        max_epochs = self.trainer.max_epochs if self.trainer and self.trainer.max_epochs else 300
         
         warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer,
@@ -1814,7 +1817,7 @@ class MultiTeacherPATIndLitModule(pl.LightningModule):
         optimizer = torch.optim.AdamW(params, lr=self.learning_rate, weight_decay=1e-4)
 
         warmup_epochs = 5
-        max_epochs = 300
+        max_epochs = self.trainer.max_epochs if self.trainer and self.trainer.max_epochs else 300
         warmup_sched = torch.optim.lr_scheduler.LinearLR(
             optimizer,
             start_factor=1e-4 / max(self.learning_rate, 1e-8),
@@ -2196,7 +2199,7 @@ class MultiTeacherPATAttnLitModule(MultiTeacherPATIndLitModule):
         optimizer = torch.optim.AdamW(params, lr=self.learning_rate, weight_decay=1e-4)
 
         warmup_epochs = 5
-        max_epochs = 300
+        max_epochs = self.trainer.max_epochs if self.trainer and self.trainer.max_epochs else 300
         warmup_sched = torch.optim.lr_scheduler.LinearLR(
             optimizer,
             start_factor=1e-4 / max(self.learning_rate, 1e-8),
@@ -2564,9 +2567,10 @@ class HCDKDLitModule(pl.LightningModule):
         )
         
         # Cosine annealing scheduler
+        max_epochs = self.trainer.max_epochs if self.trainer and self.trainer.max_epochs else 300
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=300,  # Official uses 300 epochs
+            T_max=max_epochs,  # Dynamically match config max_epochs
             eta_min=1e-3
         )
         
@@ -3314,9 +3318,10 @@ class BaselineStudentModule(pl.LightningModule):
             weight_decay=1e-4
         )
         
+        max_epochs = self.trainer.max_epochs if self.trainer and self.trainer.max_epochs else 300
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=100,
+            T_max=max_epochs,
             eta_min=1e-6
         )
         

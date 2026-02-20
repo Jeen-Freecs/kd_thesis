@@ -11,7 +11,7 @@
 WandbLogger(
     project='Knowledge-Distillation-CIFAR100',  # From config
     name=experiment_name,                        # From config
-    log_model='all',                             # Uploads best + latest checkpoints
+    log_model=False,                             # Disabled to save WandB storage (checkpoints saved locally)
     resume='allow'                               # Can resume interrupted runs
 )
 ```

@@ -32,15 +32,15 @@ kd:
 
 # Training configuration
 training:
-  max_epochs: 100
-  patience: 20
+  max_epochs: 300
+  patience: 50
   log_every_n_steps: 50
 
 # Weights & Biases configuration
 wandb:
   project: "KD-CIFAR100"
-  name: "Method1-CA-WKD-ResNet-DenseNet-ViT"
-  log_model: "all"
+  name: "Method1-CA-WKD-ResNet-DenseNet-ViT-v2"
+  log_model: false
   resume: "allow"
 
 

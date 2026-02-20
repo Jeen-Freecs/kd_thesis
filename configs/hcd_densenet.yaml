@@ -45,12 +45,12 @@ kd:
 # Training configuration (matching official: 300 epochs)
 training:
   max_epochs: 300
-  patience: 30
+  patience: 50
   log_every_n_steps: 50
 
 # Weights & Biases configuration
 wandb:
   project: "KD-CIFAR100"
-  name: "HCD-DenseNet121"
-  log_model: "all"
+  name: "HCD-DenseNet121-v2"
+  log_model: false
   resume: "allow"

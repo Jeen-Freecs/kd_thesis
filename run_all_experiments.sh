@@ -51,9 +51,9 @@ CONFIGS=(
     # "configs/pat_vit.yaml"
 
     #Multi-teacher PAT
-    "configs/multi_pat_ind.yaml"
-    # "configs/multi_pat_cw.yaml"
-    # "configs/multi_pat_attn.yaml"
+    #"configs/multi_pat_ind.yaml"
+    #"configs/multi_pat_cw.yaml"
+    "configs/multi_pat_attn.yaml"
 )
 
 ###############################################################################

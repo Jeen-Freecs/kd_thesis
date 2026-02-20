@@ -51,10 +51,14 @@ def train_kd_model(
     # WandB logger
     wandb_config = config.get('wandb', {})
     experiment_name = wandb_config.get('name', 'KD-Experiment')
+    # log_model=False: Don't auto-upload every checkpoint to WandB artifacts.
+    # We save checkpoints locally and only the best/last are kept by ModelCheckpoint.
+    # This prevents WandB storage from filling up with dozens of artifact versions.
+    # Use scripts/cleanup_wandb_artifacts.py to clean up existing artifacts.
     wandb_logger = WandbLogger(
         project=wandb_config.get('project', 'Knowledge-Distillation-CIFAR100'),
         name=experiment_name,
-        log_model='all',  # Upload all checkpoints (best + latest = 2 files)
+        log_model=wandb_config.get('log_model', False),
         resume=wandb_config.get('resume', 'allow')
     )
     

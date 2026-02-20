@@ -52,5 +52,5 @@ training:
 wandb:
   project: "KD-CIFAR100"
   name: "OFA-DenseNet121"
-  log_model: "all"
+  log_model: false
   resume: "allow"

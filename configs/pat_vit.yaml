@@ -50,5 +50,5 @@ training:
 wandb:
   project: "KD-CIFAR100"
   name: "PAT-ViT-v2"
-  log_model: "all"
+  log_model: false
   resume: "allow"

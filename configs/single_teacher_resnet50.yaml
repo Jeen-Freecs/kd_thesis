@@ -34,14 +34,14 @@ kd:
 
 # Training configuration
 training:
-  max_epochs: 150
-  patience: 30
+  max_epochs: 300
+  patience: 50
   log_every_n_steps: 50
 
 # Weights & Biases configuration
 wandb:
   project: "KD-CIFAR100"
-  name: "Single-ResNet50-alpha0.75"
-  log_model: "all"
+  name: "Single-ResNet50-alpha0.75-v2"
+  log_model: false
   resume: "allow"
 
