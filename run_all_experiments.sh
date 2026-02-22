@@ -38,23 +38,23 @@ echo "" | tee -a "${RESULTS_FILE}"
 CONFIGS=(
     # ── v2 reruns: standardized to 300 epochs + T_max bug fix ──
 
-    # Baseline (no KD)
-    "configs/baseline_config.yaml"
+    # # Baseline (no KD)
+    # "configs/baseline_config.yaml"
 
     # Single-teacher KD
-    "configs/single_teacher_densenet.yaml"
-    "configs/single_teacher_resnet50.yaml"
-    "configs/single_teacher_vit.yaml"
+    # "configs/single_teacher_densenet.yaml"
+    # "configs/single_teacher_resnet50.yaml"
+    # "configs/single_teacher_vit.yaml"
 
-    # Method 1: CA-WKD
-    "configs/method1_ca_wkd.yaml"
+    # # # Method 1: CA-WKD
+    # "configs/method1_ca_wkd.yaml"
 
-    # Method 2: α-Guided CA-WKD
-    "configs/method2_dynamic_kd.yaml"
-    "configs/method2_diverse_ensemble.yaml"
+    # # Method 2: α-Guided CA-WKD
+    # "configs/method2_dynamic_kd.yaml"
+    # "configs/method2_diverse_ensemble.yaml"
 
-    # Method 3: Adaptive α-Guided KD
-    "configs/method3_adaptive_alpha.yaml"
+    #Method 3: Adaptive α-Guided KD
+    # "configs/method3_adaptive_alpha.yaml"
     "configs/method3_3resnets_no_ce.yaml"
     "configs/method3_densenet_resnet_temp8.yaml"
     "configs/method3_densenet_resnet_temp16.yaml"
